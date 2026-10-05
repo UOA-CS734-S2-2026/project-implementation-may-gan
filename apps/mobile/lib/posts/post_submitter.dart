@@ -86,11 +86,13 @@ class GeneratedPostSubmitter implements DailyPostSubmitter {
     required String baseUrl,
     required this._bearerToken,
     this._httpClient,
+    this.onForbidden,
   }) : _baseUrl = baseUrl.replaceFirst(RegExp(r'/$'), '');
 
   final String _baseUrl;
   final Future<String?> Function() _bearerToken;
   final http.Client? _httpClient;
+  final void Function()? onForbidden;
 
   @override
   Future<SubmissionResult> submit(DailyPostDraft draft) async {
@@ -120,7 +122,11 @@ class GeneratedPostSubmitter implements DailyPostSubmitter {
       );
     } on generated.ApiException catch (error) {
       return SubmissionFailed(
-        failureForStatus(error.code, error.innerException),
+        failureForStatus(
+          error.code,
+          error.innerException,
+          onForbidden: onForbidden,
+        ),
       );
     } on IOException {
       return const SubmissionFailed(NetworkUnavailable());
@@ -153,7 +159,9 @@ class GeneratedPostSubmitter implements DailyPostSubmitter {
         ),
       );
     }
-    return SubmissionFailed(failureForStatus(status, null));
+    return SubmissionFailed(
+      failureForStatus(status, null, onForbidden: onForbidden),
+    );
   }
 
   static Object? _errorReason(String body) {

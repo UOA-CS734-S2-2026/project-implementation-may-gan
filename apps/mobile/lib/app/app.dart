@@ -61,6 +61,7 @@ class _DayliAppState extends State<DayliApp> with WidgetsBindingObserver {
     switch (state) {
       case AppLifecycleState.resumed:
         biometric.reveal();
+        widget.services.session.refreshAccountPolicyOnForeground();
         unawaited(widget.services.messaging.foreground());
       case AppLifecycleState.inactive:
         // Also sent while the system authentication prompt is open; the

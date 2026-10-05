@@ -33,6 +33,26 @@ void main() {
     },
   );
 
+  testWidgets(
+    'an active app enters Terms acceptance when Terms become effective',
+    (tester) async {
+      final harness = TestHarness(effectiveTerms: true)
+        ..tokens.value = 'token-1';
+      await tester.pumpWidget(
+        DayliApp(services: harness.services, useGoogleFonts: false),
+      );
+      await tester.pumpAndSettle();
+      expect(harness.session.status, SessionStatus.signedIn);
+
+      harness.accountRestriction = 'terms_blocked';
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+
+      expect(harness.session.status, SessionStatus.legalAcceptanceRequired);
+      expect(find.byKey(const Key('legal.acceptanceAction')), findsOneWidget);
+    },
+  );
+
   testWidgets('blocked accounts can still sign out', (tester) async {
     final harness = TestHarness(
       effectiveTerms: true,

@@ -119,6 +119,7 @@ class SessionController extends ChangeNotifier {
   SessionUser? _user;
   String? _startedSessionUserId;
   int _sessionGeneration = 0;
+  Future<void>? _policyRefresh;
   final PublicReturnIntentRegistry _publicReturnIntents =
       PublicReturnIntentRegistry();
 
@@ -219,10 +220,41 @@ class SessionController extends ChangeNotifier {
   }
 
   /// Rechecks the server-owned policy after acceptance or a temporary outage.
-  Future<void> refreshAccountPolicy() async {
+  /// Concurrent foreground and rejected-request checks share one request.
+  Future<void> refreshAccountPolicy() {
     final user = _user;
-    if (user == null) throw const AuthenticationFailure('account-policy', 401);
-    await _applyAccountPolicy(user, persistUser: false);
+    if (user == null) {
+      return Future<void>.error(
+        const AuthenticationFailure('account-policy', 401),
+      );
+    }
+    final active = _policyRefresh;
+    if (active != null) return active;
+    final refresh = _applyAccountPolicy(user, persistUser: false);
+    _policyRefresh = refresh;
+    return refresh.whenComplete(() {
+      if (identical(_policyRefresh, refresh)) _policyRefresh = null;
+    });
+  }
+
+  /// Called whenever the app returns to the foreground. A cached offline
+  /// identity is provisional: reconnecting must obtain the current server
+  /// policy before ordinary screens remain available.
+  void refreshAccountPolicyOnForeground() {
+    if (_user == null ||
+        (_status != SessionStatus.signedIn &&
+            _status != SessionStatus.needsUsernameSetup &&
+            _status != SessionStatus.legalStatusUnavailable)) {
+      return;
+    }
+    unawaited(refreshAccountPolicy());
+  }
+
+  /// Called by authenticated API adapters for a 403. A policy refresh decides
+  /// whether this was ordinary resource denial or newly effective Terms.
+  void authenticatedApiForbidden() {
+    if (_user == null || _status == SessionStatus.signedOut) return;
+    unawaited(refreshAccountPolicy());
   }
 
   Future<void> signUp({

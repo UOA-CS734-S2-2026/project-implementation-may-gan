@@ -83,13 +83,18 @@ Future<void> main() async {
     baseUrl: config.apiBaseUrl,
     tokenStore: tokenStore,
   );
+  late final SessionController session;
+  void policyDenied() => session.authenticatedApiForbidden();
+  configureAuthenticatedApiForbiddenHandler(policyDenied);
   final messagingClient = HttpMessagingClient(
     baseUrl: config.apiBaseUrl,
     bearerToken: nativeSession.bearerToken,
+    onForbidden: policyDenied,
   );
   final friendsClient = GeneratedFriendsClient(
     baseUrl: config.apiBaseUrl,
     bearerToken: nativeSession.bearerToken,
+    onForbidden: policyDenied,
   );
   final feedClient = GeneratedFeedClient(
     baseUrl: config.apiBaseUrl,
@@ -98,6 +103,7 @@ Future<void> main() async {
   final postingDayClient = GeneratedPostingDayClient(
     baseUrl: config.apiBaseUrl,
     bearerToken: nativeSession.bearerToken,
+    onForbidden: policyDenied,
   );
   final messaging = MessagingController(messagingClient);
   PushService? push;
@@ -148,7 +154,7 @@ Future<void> main() async {
     startPush: notificationConsent.start,
     stopPush: notificationConsent.clear,
   );
-  final session = SessionController(
+  session = SessionController(
     session: nativeSession,
     tokenStore: tokenStore,
     userCache: ProtectedSessionUserCache(secureStorage),
@@ -184,6 +190,7 @@ Future<void> main() async {
         interactions: GeneratedInteractionsClient(
           baseUrl: config.apiBaseUrl,
           bearerToken: nativeSession.bearerToken,
+          onForbidden: policyDenied,
         ),
         drafts: drafts,
         messaging: messaging,
@@ -205,6 +212,7 @@ Future<void> main() async {
         submitter: GeneratedPostSubmitter(
           baseUrl: config.apiBaseUrl,
           bearerToken: nativeSession.bearerToken,
+          onForbidden: policyDenied,
         ),
         mediaCompressor: mediaCompressor,
         streakCache: streakCache,
