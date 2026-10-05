@@ -12,7 +12,7 @@ import { exportExecutionEnabled, readStagingExportProof, stagingExportAllUsersEn
   stagingExportCleanupOnlyEnabled } from "./features/data-export/shared/export-activation";
 import { createExportRuntimeForEnv } from "./infrastructure/jobs/export-runtime";
 import { runPostTrashCleanupForEnv } from "./infrastructure/jobs/post-trash-runtime";
-import { runRealtimeRevocationsForEnv } from "./infrastructure/jobs/account-realtime-revocation";
+import { realtimeRevocationBindingFailure, runRealtimeRevocationsForEnv } from "./infrastructure/jobs/account-realtime-revocation";
 
 export { app };
 export { BrowserProxyEntrypoint } from "./http/browser-proxy-entrypoint";
@@ -50,7 +50,7 @@ export default {
 async function runRealtimeRevocationMaintenance(env: ApiEnv): Promise<void> {
   try {
     const summary = await runRealtimeRevocationsForEnv(env);
-    if (!summary) console.error("account realtime revocation bindings unavailable");
+    if (!summary) console.error("account realtime revocation bindings unavailable", env.API_RATE_LIMIT_SCOPE === "staging" ? { reason: realtimeRevocationBindingFailure(env) } : undefined);
     else if (summary.claimed > 0 || summary.report.due > 0 || summary.report.failed > 0) console.info("account realtime revocation", summary);
   } catch {
     console.error("account realtime revocation failed");

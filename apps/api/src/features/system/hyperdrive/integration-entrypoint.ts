@@ -9,6 +9,7 @@ import {
 } from "@dayli/db";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import type { ApiEnv } from "../../../env";
+import { probeOAuthEgress, type OAuthEgressProof } from "../../../infrastructure/push/oauth-egress-probe";
 
 export interface StagingRevisionProof {
   revision: string;
@@ -29,6 +30,12 @@ export interface PostTrashWorkerFenceProof {
  * registered as an HTTP route.
  */
 export class HyperdriveIntegrationEntrypoint extends WorkerEntrypoint<ApiEnv> {
+  async diagnoseOAuthEgress(): Promise<OAuthEgressProof> {
+    const proof = await probeOAuthEgress(this.env.API_RATE_LIMIT_SCOPE);
+    console.info("notification OAuth egress diagnostics", proof);
+    return proof;
+  }
+
   async proveStagingRevision(): Promise<StagingRevisionProof> {
     const revision = this.env.STAGING_RELEASE_SHA;
     const accountId = this.env.R2_ACCOUNT_ID;

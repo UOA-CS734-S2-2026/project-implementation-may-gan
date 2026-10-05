@@ -157,15 +157,27 @@ function isLifecycleWorker(value: string): boolean {
   catch { return false; }
 }
 
-/** Safe scheduled side effect. It cannot purge content or enable deletion requests. */
-export async function runRealtimeRevocationsForEnv(env: Partial<ApiEnv>): Promise<RealtimeRevocationSummary | null> {
+export type RealtimeRevocationBindingFailure = "realtime_missing" | "app_database_missing_or_invalid" | "worker_database_missing_or_invalid" | "database_bindings_identical" | "worker_role_invalid";
+
+/** Fixed reasons only. Never expose connection strings or their credentials. */
+export function realtimeRevocationBindingFailure(env: Partial<ApiEnv>): RealtimeRevocationBindingFailure | undefined {
+  if (!env.USER_REALTIME) return "realtime_missing";
   const app = connectionString(env.HYPERDRIVE);
   const worker = connectionString(env.EXPORT_WORKER_HYPERDRIVE);
-  if (!env.USER_REALTIME || !app || !worker || app === worker || !isLifecycleWorker(worker)) return null;
+  if (!app) return "app_database_missing_or_invalid";
+  if (!worker) return "worker_database_missing_or_invalid";
+  if (app === worker) return "database_bindings_identical";
+  if (!isLifecycleWorker(worker)) return "worker_role_invalid";
+  return undefined;
+}
+
+/** Safe scheduled side effect. It cannot purge content or enable deletion requests. */
+export async function runRealtimeRevocationsForEnv(env: Partial<ApiEnv>): Promise<RealtimeRevocationSummary | null> {
+  if (realtimeRevocationBindingFailure(env)) return null;
   const database = createHyperdriveDatabase(env.EXPORT_WORKER_HYPERDRIVE!);
   try {
     return await createRealtimeRevocationDispatcher({
-      store: createRealtimeRevocationStore(database.db), namespace: env.USER_REALTIME,
+      store: createRealtimeRevocationStore(database.db), namespace: env.USER_REALTIME!,
     }).dispatchScheduled();
   } finally { await database.close(); }
 }
