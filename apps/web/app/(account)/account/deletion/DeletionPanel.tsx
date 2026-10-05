@@ -169,8 +169,12 @@ export function DeletionPanel({ requestEnabled }: { requestEnabled: boolean }) {
     }, popupTimeoutMs);
     setBusy(true);
     setError(undefined);
-    try { popup.location.assign(await beginGoogleDeletionProof(action)); }
-    catch {
+    try {
+      const authorizationUrl = await beginGoogleDeletionProof(action);
+      if (expectedGooglePopup.current?.popup !== popup) return;
+      popup.location.assign(authorizationUrl);
+    } catch {
+      if (expectedGooglePopup.current?.popup !== popup) return;
       stopPopupMonitor();
       expectedGooglePopup.current = undefined;
       popup.close();

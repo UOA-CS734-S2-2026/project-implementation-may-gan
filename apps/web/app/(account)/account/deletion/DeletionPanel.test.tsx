@@ -140,6 +140,33 @@ describe("account deletion owner flow", () => {
     expect(second.location.assign).toHaveBeenCalledWith("https://accounts.google.test/authorize");
   });
 
+  it("ignores a stale authorization failure after a timed-out popup is retried", async () => {
+    const first = { closed: false, location: { assign: vi.fn() }, close: vi.fn() };
+    const second = { closed: false, location: { assign: vi.fn() }, close: vi.fn() };
+    vi.spyOn(window, "open").mockReturnValueOnce(first as unknown as Window).mockReturnValueOnce(second as unknown as Window);
+    let rejectFirst!: (error: Error) => void;
+    mocks.google.mockImplementationOnce(() => new Promise<string>((_resolve, reject) => { rejectFirst = reject; }))
+      .mockResolvedValueOnce("https://accounts.google.test/authorize");
+    render(<DeletionPanel requestEnabled />);
+    await screen.findByText("Status: active");
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByRole("checkbox"));
+    const verify = screen.getByRole("button", { name: "Verify with Google instead" });
+    fireEvent.click(verify);
+    await act(async () => { await vi.advanceTimersByTimeAsync(120_000); });
+    fireEvent.click(verify);
+    await act(async () => {});
+    expect(second.location.assign).toHaveBeenCalledWith("https://accounts.google.test/authorize");
+    await act(async () => { rejectFirst(new Error("late failure")); });
+    expect(verify).toBeDisabled();
+    expect(second.close).not.toHaveBeenCalled();
+    window.dispatchEvent(new MessageEvent("message", { origin: window.location.origin, source: second as unknown as MessageEventSource, data: {
+      type: "dayli.account-management-grant", action: "request_deletion", token: "c".repeat(64),
+    } }));
+    await act(async () => {});
+    expect(screen.getByText(/Google verification complete/)).toBeInTheDocument();
+  });
+
   it("recovers from a Google authorization setup error", async () => {
     const first = { closed: false, location: { assign: vi.fn() }, close: vi.fn() };
     const second = { closed: false, location: { assign: vi.fn() }, close: vi.fn() };
