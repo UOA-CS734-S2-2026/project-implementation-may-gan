@@ -35,8 +35,18 @@ export type FcmResult =
   | { ok: true }
   | { ok: false; retryable: boolean; category: "transient" | "rate_limited" | "provider_rejected" | "unauthorized" };
 
+export type FcmDiagnostic = {
+  stage: "oauth" | "fcm";
+  outcome: "accepted" | "signing_invalid" | "response_rejected" | "response_invalid" | "transport_failed" | "aborted";
+  httpStatus?: number;
+};
+
+function responseStatus(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 100 && value <= 599 ? value : undefined;
+}
+
 export class FcmOAuthError extends Error {
-  constructor(public readonly category: "signing_invalid" | "response_rejected" | "response_invalid" | "transport_failed") {
+  constructor(public readonly category: "signing_invalid" | "response_rejected" | "response_invalid" | "transport_failed", public readonly httpStatus?: number) {
     super(category);
   }
 }
@@ -93,7 +103,7 @@ export async function requestFcmOAuthToken(input: {
   if (!response || typeof response !== "object" || typeof response.ok !== "boolean") {
     throw new FcmOAuthError("response_invalid");
   }
-  if (!response.ok) throw new FcmOAuthError("response_rejected");
+  if (!response.ok) throw new FcmOAuthError("response_rejected", responseStatus(response.status));
 
   let body: unknown;
   try {
@@ -110,32 +120,53 @@ export async function requestFcmOAuthToken(input: {
 }
 
 /** Worker-compatible FCM HTTP v1 sender. It never includes sender or message text. */
-export function createFcmHttpV1Sender(input: { serviceAccount: FcmServiceAccount; fetch?: typeof globalThis.fetch; now?: () => Date }) {
+export function createFcmHttpV1Sender(input: { serviceAccount: FcmServiceAccount; fetch?: typeof globalThis.fetch; now?: () => Date; onDiagnostic?: (value: FcmDiagnostic) => void }) {
   const fetcher = input.fetch ?? globalThis.fetch;
   const now = input.now ?? (() => new Date());
   let accessToken: { value: string; expiresAt: number } | undefined;
+  const diagnose = (value: FcmDiagnostic) => {
+    // Observability must never change delivery or retry behavior.
+    try { input.onDiagnostic?.(value); } catch { /* Ignore diagnostic sink failures. */ }
+  };
 
   async function oauthToken(signal?: AbortSignal): Promise<string> {
     if (accessToken && accessToken.expiresAt > now().getTime() + 30_000) return accessToken.value;
-    const token = await requestFcmOAuthToken({ serviceAccount: input.serviceAccount, fetch: fetcher, now, signal });
-    accessToken = { value: token.token, expiresAt: token.expiresAt };
-    return accessToken.value;
+    try {
+      const token = await requestFcmOAuthToken({ serviceAccount: input.serviceAccount, fetch: fetcher, now, signal });
+      accessToken = { value: token.token, expiresAt: token.expiresAt };
+      diagnose({ stage: "oauth", outcome: "accepted" });
+      return accessToken.value;
+    } catch (error) {
+      const outcome = signal?.aborted ? "aborted" : error instanceof FcmOAuthError ? error.category : "transport_failed";
+      const httpStatus = error instanceof FcmOAuthError ? responseStatus(error.httpStatus) : undefined;
+      diagnose({ stage: "oauth", outcome, ...(httpStatus === undefined ? {} : { httpStatus }) });
+      throw error;
+    }
   }
 
   async function sendPayload(payload: unknown, signal?: AbortSignal): Promise<FcmResult> {
+    let stage: FcmDiagnostic["stage"] = "oauth";
     try {
-      if (signal?.aborted) return { ok: false, retryable: true, category: "transient" };
+      if (signal?.aborted) {
+        diagnose({ stage, outcome: "aborted" });
+        return { ok: false, retryable: true, category: "transient" };
+      }
+      const token = await oauthToken(signal);
+      stage = "fcm";
       const response = await fetcher(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(input.serviceAccount.projectId)}/messages:send`, {
         method: "POST",
-        headers: { authorization: `Bearer ${await oauthToken(signal)}`, "content-type": "application/json" },
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         body: JSON.stringify(payload), signal,
       });
+      const httpStatus = responseStatus(response.status);
+      diagnose({ stage, outcome: response.ok ? "accepted" : "response_rejected", ...(httpStatus === undefined ? {} : { httpStatus }) });
       if (response.ok) return { ok: true };
       if (response.status === 401 || response.status === 403) return { ok: false, retryable: true, category: "unauthorized" };
       if (response.status === 429) return { ok: false, retryable: true, category: "rate_limited" };
       if (response.status >= 500) return { ok: false, retryable: true, category: "transient" };
       return { ok: false, retryable: false, category: "provider_rejected" };
     } catch {
+      if (stage === "fcm") diagnose({ stage, outcome: signal?.aborted ? "aborted" : "transport_failed" });
       return { ok: false, retryable: true, category: "transient" };
     }
   }

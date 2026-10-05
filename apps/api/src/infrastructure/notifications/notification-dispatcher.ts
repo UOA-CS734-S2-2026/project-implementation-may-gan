@@ -49,6 +49,7 @@ export function createNotificationDispatcher(input: {
   leaseForMs?: number;
   deliveryTimeoutMs?: number;
   maxAttempts?: number;
+  onDiagnostic?: (value: { stage: "resolve" | "send"; outcome: "timed_out" | "failed" | "suppressed" }) => void;
 }): NotificationDispatcher {
   const now = input.now ?? (() => new Date());
   const random = input.random ?? Math.random;
@@ -60,6 +61,9 @@ export function createNotificationDispatcher(input: {
   const leaseForMs = input.leaseForMs ?? 30_000;
   const maxAttempts = input.maxAttempts ?? 12;
   const deliveryTimeoutMs = Math.max(1, Math.min(input.deliveryTimeoutMs ?? 20_000, leaseForMs - 1_000));
+  const diagnose: NonNullable<typeof input.onDiagnostic> = (value) => {
+    try { input.onDiagnostic?.(value); } catch { /* Ignore diagnostic sink failures. */ }
+  };
 
   async function dispatch(limit: number, deadline: number): Promise<NotificationDispatchSummary> {
     const summary = emptySummary();
@@ -77,11 +81,13 @@ export function createNotificationDispatcher(input: {
 
       const resolution = await resolveWithinDeadline(input.resolver, job, deadline, now);
       if (resolution.state === "timed_out" || now().getTime() >= deadline) {
+        diagnose({ stage: "resolve", outcome: "timed_out" });
         if (await input.store.releaseLease(job, now())) summary.released += 1;
         else summary.fenced += 1;
         break;
       }
       if (resolution.state === "failed") {
+        diagnose({ stage: "resolve", outcome: "failed" });
         const terminal = job.attempts >= maxAttempts;
         const availableAt = new Date(now().getTime() + retryDelayMs(job.attempts, random));
         if (await input.store.reschedule(job, { availableAt, failureCategory: "unknown", terminal })) {
@@ -91,6 +97,7 @@ export function createNotificationDispatcher(input: {
         continue;
       }
       if (!resolution.notification) {
+        diagnose({ stage: "resolve", outcome: "suppressed" });
         if (await input.store.markSuppressed(job, "ineligible")) summary.suppressed += 1;
         else summary.fenced += 1;
         continue;
@@ -108,6 +115,7 @@ export function createNotificationDispatcher(input: {
         input.sender,
         resolution.notification,
         Math.min(deliveryTimeoutMs, remainingBudgetMs),
+        diagnose,
       );
       if (result.ok) {
         if (await input.store.markDelivered(renewed, now())) summary.delivered += 1;
@@ -172,6 +180,7 @@ async function sendWithTimeout(
   sender: GenericNotificationSender,
   notification: Awaited<ReturnType<DirectMessageNotificationResolver["resolve"]>> & {},
   timeoutMs: number,
+  diagnose: (value: { stage: "send"; outcome: "timed_out" | "failed" }) => void,
 ): Promise<DeliveryResult> {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -186,11 +195,15 @@ async function sendWithTimeout(
   }, { signal: controller.signal }));
   const settled: Promise<DeliveryResult> = operation.then(
     (result) => result,
-    () => ({ ok: false, retryable: true, category: "unknown" }),
+    () => {
+      diagnose({ stage: "send", outcome: "failed" });
+      return { ok: false, retryable: true, category: "unknown" };
+    },
   );
   try {
     const timeout = new Promise<DeliveryResult>((resolve) => {
       timer = setTimeout(() => {
+        diagnose({ stage: "send", outcome: "timed_out" });
         resolve({ ok: false, retryable: true, category: "transient" });
         controller.abort();
       }, timeoutMs);

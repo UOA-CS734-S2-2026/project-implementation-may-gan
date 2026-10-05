@@ -1,6 +1,6 @@
 import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import { buildFcmPayload, buildGenericFcmPayload, createFcmHttpV1Sender, normalizeFcmServiceAccount } from "../fcm";
+import { buildFcmPayload, buildGenericFcmPayload, createFcmHttpV1Sender, normalizeFcmServiceAccount, type FcmDiagnostic } from "../fcm";
 import { createPushOutboxHandler } from "../push-dispatcher";
 
 const job = { id: "push-job", eventId: "event", recipientId: "peer", conversationId: "conversation", changeSequence: "4", channel: "push" as const, deviceRegistrationId: "device", attempts: 1, leaseToken: "lease", leaseExpiresAt: new Date() };
@@ -55,6 +55,81 @@ describe("FCM HTTP v1 adapter", () => {
     await sender.send({ token: "device-2", eventId: "event-2", conversationId: "conversation" });
     expect(fetcher.mock.calls.filter(([url]) => String(url).includes("oauth2"))).toHaveLength(1);
     expect(fetcher.mock.calls.filter(([url]) => String(url).includes("fcm.googleapis"))).toHaveLength(2);
+  });
+
+  it("reports signing failures without leaking credentials or payloads", async () => {
+    const diagnostics: FcmDiagnostic[] = [];
+    const fetcher = vi.fn();
+    const sender = createFcmHttpV1Sender({
+      serviceAccount: { clientEmail: "private-email", privateKey: "private-key-marker", projectId: "private-project" },
+      fetch: fetcher,
+      onDiagnostic: (value) => diagnostics.push(value),
+    });
+    await expect(sender.sendGeneric({ token: "private-device", eventId: "private-event", targetId: "private-target", type: "direct_message", targetType: "conversation", title: "private-name", body: "private-body" })).resolves.toEqual({ ok: false, retryable: true, category: "transient" });
+    expect(diagnostics).toEqual([{ stage: "oauth", outcome: "signing_invalid" }]);
+    expect(JSON.stringify(diagnostics)).not.toContain("private-");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it.each([400, 401, 403, 500])("reports OAuth rejection status %s without its response body", async (status) => {
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const diagnostics: FcmDiagnostic[] = [];
+    const sender = createFcmHttpV1Sender({
+      serviceAccount: { clientEmail: "private-email", privateKey: privateKey.export({ type: "pkcs8", format: "pem" }).toString(), projectId: "private-project" },
+      fetch: vi.fn(async () => new Response("private-response-body", { status })) as typeof fetch,
+      onDiagnostic: (value) => diagnostics.push(value),
+    });
+    await expect(sender.send({ token: "private-device", eventId: "private-event", conversationId: "private-conversation" })).resolves.toMatchObject({ category: "transient", retryable: true });
+    expect(diagnostics).toEqual([{ stage: "oauth", outcome: "response_rejected", httpStatus: status }]);
+    expect(JSON.stringify(diagnostics)).not.toContain("private-");
+  });
+
+  it.each([200, 401, 403, 429, 500])("distinguishes FCM status %s from successful OAuth", async (status) => {
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const diagnostics: FcmDiagnostic[] = [];
+    const sender = createFcmHttpV1Sender({
+      serviceAccount: { clientEmail: "private-email", privateKey: privateKey.export({ type: "pkcs8", format: "pem" }).toString(), projectId: "private-project" },
+      fetch: vi.fn(async (url) => String(url).includes("oauth2")
+        ? new Response(JSON.stringify({ access_token: "private-access-token", expires_in: 300 }))
+        : new Response("private-response-body", { status })) as typeof fetch,
+      onDiagnostic: (value) => diagnostics.push(value),
+    });
+    const result = await sender.send({ token: "private-device", eventId: "private-event", conversationId: "private-conversation" });
+    expect(result.ok).toBe(status === 200);
+    expect(diagnostics).toEqual([{ stage: "oauth", outcome: "accepted" }, { stage: "fcm", outcome: status === 200 ? "accepted" : "response_rejected", httpStatus: status }]);
+    expect(JSON.stringify(diagnostics)).not.toContain("private-");
+  });
+
+  it("reports transport and abort outcomes without exception text", async () => {
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    for (const failStage of ["oauth", "fcm"] as const) {
+      const diagnostics: FcmDiagnostic[] = [];
+      const sender = createFcmHttpV1Sender({
+        serviceAccount: { clientEmail: "private-email", privateKey: privateKey.export({ type: "pkcs8", format: "pem" }).toString(), projectId: "private-project" },
+        fetch: vi.fn(async (url) => {
+          if (String(url).includes("oauth2") && failStage === "fcm") return new Response(JSON.stringify({ access_token: "private-access-token", expires_in: 300 }));
+          throw new Error("private-exception-text");
+        }) as typeof fetch,
+        onDiagnostic: (value) => diagnostics.push(value),
+      });
+      await expect(sender.send({ token: "private-device", eventId: "private-event", conversationId: "private-conversation" })).resolves.toMatchObject({ category: "transient" });
+      expect(diagnostics.at(-1)).toEqual({ stage: failStage, outcome: "transport_failed" });
+      const controller = new AbortController();
+      controller.abort();
+      await sender.send({ token: "private-device", eventId: "private-event", conversationId: "private-conversation" }, { signal: controller.signal });
+      expect(diagnostics.at(-1)).toEqual({ stage: "oauth", outcome: "aborted" });
+      expect(JSON.stringify(diagnostics)).not.toContain("private-");
+    }
+  });
+
+  it("does not turn successful delivery into a retry if the diagnostic sink throws", async () => {
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const sender = createFcmHttpV1Sender({
+      serviceAccount: { clientEmail: "worker@example.test", privateKey: privateKey.export({ type: "pkcs8", format: "pem" }).toString(), projectId: "project" },
+      fetch: vi.fn(async (url) => String(url).includes("oauth2") ? new Response(JSON.stringify({ access_token: "private-token", expires_in: 300 })) : new Response("{}")) as typeof fetch,
+      onDiagnostic: () => { throw new Error("diagnostic sink failure"); },
+    });
+    await expect(sender.send({ token: "device", eventId: "event", conversationId: "conversation" })).resolves.toEqual({ ok: true });
   });
 
   it("invalidates a permanently rejected registration and treats stale policy as suppression", async () => {
