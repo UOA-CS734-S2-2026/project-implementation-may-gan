@@ -78,7 +78,7 @@ function isInjectedCloudflareAnalyticsScript(request) {
 
 /** Emit only allowlisted fields. Never pass exception text or browser values here. */
 export function createSafeReporter(write = (line) => process.stdout.write(`${line}\n`)) {
-  return ({ step, outcome, durationMs, category, phase, destination }) => {
+  return ({ step, outcome, durationMs, category, phase, destination, progress }) => {
     const fields = [`staging_auth_smoke step=${step}`, `outcome=${outcome}`, `duration_ms=${durationMs}`];
     if (category) fields.push(`category=${category}`);
     if (step === "diagnostic" && ["login_failure", "cleanup_failure"].includes(phase)) {
@@ -88,6 +88,12 @@ export function createSafeReporter(write = (line) => process.stdout.write(`${lin
         "sign_in_other", "session_refresh_expected", "session_refresh_other", "legal_acceptance",
         "setup_username", "home", "landing", "other_staging",
       ].includes(destination) ? destination : "unknown"}`);
+      if (phase === "login_failure" && progress) {
+        fields.push(`submit_state=${["pending", "idle"].includes(progress.submitState) ? progress.submitState : "unknown"}`);
+        for (const [field, value] of [["session_get", progress.sessionGet], ["session_refresh", progress.sessionRefresh], ["profile_get", progress.profileGet]]) {
+          fields.push(`${field}=${["no_request", "no_response", "success", "unauthorized", "rate_limited", "http_error"].includes(value) ? value : "unknown"}`);
+        }
+      }
     }
     write(fields.join(" "));
   };
@@ -154,15 +160,45 @@ function isTrustedSignInRequest(request) {
   } catch { return false; }
 }
 
+function authRequestKind(request) {
+  try {
+    const url = new URL(request.url());
+    if (url.origin !== STAGING_ORIGIN || url.search !== "") return null;
+    if (url.pathname === "/api/auth/get-session") {
+      if (request.method() === "GET") return "session_get";
+      if (request.method() === "POST") return "session_refresh";
+    }
+    if (url.pathname === "/api/v1/profile/username" && request.method() === "GET") return "profile_get";
+  } catch { /* Ignore URLs that cannot match the fixed origin. */ }
+  return null;
+}
+
 function observeSignIn(page) {
-  const observation = { requested: false, status: null };
+  const observation = {
+    requested: false,
+    status: null,
+    authRequests: Object.fromEntries(["session_get", "session_refresh", "profile_get"].map((kind) => [kind, { requested: false, status: null }])),
+  };
   page.on("request", (request) => {
     if (isTrustedSignInRequest(request)) observation.requested = true;
+    const kind = authRequestKind(request);
+    if (kind) observation.authRequests[kind].requested = true;
   });
   page.on("response", (response) => {
     if (isTrustedSignInRequest(response.request())) observation.status = response.status();
+    const kind = authRequestKind(response.request());
+    if (kind) observation.authRequests[kind].status = response.status();
   });
   return observation;
+}
+
+function responseClass({ requested, status }) {
+  if (!requested) return "no_request";
+  if (status === null) return "no_response";
+  if (status >= 200 && status < 300) return "success";
+  if (status === 401) return "unauthorized";
+  if (status === 429) return "rate_limited";
+  return "http_error";
 }
 
 async function loginFailureCategory(context, observation) {
@@ -211,7 +247,13 @@ async function defaultJourney({ context, page, unexpectedHost, journeyBaseline, 
     await page.waitForURL((url) => url.origin === STAGING_ORIGIN && url.pathname === "/settings" && url.search === "?smoke=auth", { timeout: STEP_TIMEOUT_MS });
     checkPhase(unexpectedHost, journeyBaseline);
   } catch {
-    reportDiagnostic("login_failure", page);
+    const submitting = await page.getByRole("button", { name: "Signing in…", exact: true }).isVisible().catch(() => false);
+    reportDiagnostic("login_failure", page, {
+      submitState: submitting ? "pending" : "idle",
+      sessionGet: responseClass(signIn.authRequests.session_get),
+      sessionRefresh: responseClass(signIn.authRequests.session_refresh),
+      profileGet: responseClass(signIn.authRequests.profile_get),
+    });
     if (unexpectedHost.count > journeyBaseline) throw failure("unexpected_host");
     let category;
     try { category = await loginFailureCategory(context, signIn); }
@@ -331,7 +373,7 @@ export async function runSmoke({ browserType, reporter = createSafeReporter(), j
     page = await context.newPage();
     const journeyBaseline = unexpectedHost.count;
     await journey({
-      reportDiagnostic: (phase, currentPage) => reporter({ step: "diagnostic", outcome: "observed", durationMs: Date.now() - startedAt, phase, destination: safeDestination(currentPage.url()) }),
+      reportDiagnostic: (phase, currentPage, progress) => reporter({ step: "diagnostic", outcome: "observed", durationMs: Date.now() - startedAt, phase, destination: safeDestination(currentPage.url()), progress }),
       context,
       page,
       unexpectedHost,

@@ -52,6 +52,11 @@ function browserType(options = {}) {
     let redirectPending;
     const listeners = { request: [], response: [] };
     const signInRequest = { url: () => `${STAGING_ORIGIN}/api/auth/sign-in/email`, method: () => "POST" };
+    function emitAuthRequest(path, method, status) {
+      const request = { url: () => `${STAGING_ORIGIN}${path}`, method: () => method };
+      for (const listener of listeners.request) listener(request);
+      if (status !== null) for (const listener of listeners.response) listener({ request: () => request, status: () => status });
+    }
 
     function scheduleSignInRedirect(pathname, search) {
       const signInUrl = `${STAGING_ORIGIN}/sign-in?next=${encodeURIComponent(`${pathname}${search}`)}`;
@@ -136,10 +141,14 @@ function browserType(options = {}) {
             }
             state.session = !options.sessionMissingAfterFailedLogin && !options.signInRequestMissing
               && !options.signInResponseMissing && (options.signInHttpStatus ?? 200) === 200;
+            if (options.sessionGetStatus !== undefined) emitAuthRequest("/api/auth/get-session", "GET", options.sessionGetStatus);
+            if (options.sessionRefreshStatus !== undefined) emitAuthRequest("/api/auth/get-session", "POST", options.sessionRefreshStatus);
+            if (options.profileGetStatus !== undefined) emitAuthRequest("/api/v1/profile/username", "GET", options.profileGetStatus);
             if (options.signInDestination) currentUrl = options.signInDestination;
             else if (!options.loginNavigationFails && state.session) currentUrl = protectedUrl;
           } };
         }
+        if (locator.name === "Signing in…") return { isVisible: async () => options.submittingAtFailure ?? false };
         if (locator.name === "Sign out") {
           return {
             waitFor: async () => {
@@ -334,6 +343,30 @@ test("destination labels are fixed and never contain browser URL data", () => {
   report({ step: "diagnostic", outcome: "observed", durationMs: 0, phase: "login_failure", destination: "private-password" });
   assert.match(output[0], /phase=login_failure destination=unknown$/);
   assert.doesNotMatch(output[0], /private-password/);
+});
+
+test("login timeout reports fixed session request and submit phases", async () => {
+  const result = await runDefault({
+    loginNavigationFails: true,
+    submittingAtFailure: true,
+    sessionGetStatus: 200,
+    sessionRefreshStatus: 401,
+    profileGetStatus: 429,
+    errorText: "private-password",
+  });
+  assert.equal(result.passed, false);
+  assert.match(result.output, /phase=login_failure destination=sign_in_expected submit_state=pending session_get=success session_refresh=unauthorized profile_get=rate_limited/);
+  assertNoSensitiveOutput(result);
+});
+
+test("diagnostic reporter rejects unrecognized request outcomes", () => {
+  const lines = [];
+  createSafeReporter((line) => lines.push(line))({
+    step: "diagnostic", outcome: "observed", durationMs: 0, phase: "login_failure", destination: "sign_in_expected",
+    progress: { submitState: "private-password", sessionGet: "private-password", sessionRefresh: "private-password", profileGet: "private-password" },
+  });
+  assert.match(lines[0], /submit_state=unknown session_get=unknown session_refresh=unknown profile_get=unknown$/);
+  assert.doesNotMatch(lines[0], /private-password/);
 });
 
 test("failed navigation reports a fixed destination before cleanup changes the page", async () => {
