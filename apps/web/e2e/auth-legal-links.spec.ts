@@ -13,7 +13,9 @@ test("public auth entries use compact approved legal links", async ({ page }) =>
   }
 
   await page.goto("/sign-up");
-  await page.getByRole("link", { name: "Privacy Policy" }).click();
+  await expect(page.getByRole("checkbox", { name: /I agree to the Terms of Service/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Privacy Policy", exact: true })).toHaveCount(2);
+  await page.getByRole("navigation", { name: "Legal documents" }).getByRole("link", { name: "Privacy Policy" }).click();
   await expect(page).toHaveURL(/\/privacy$/);
   await expect(page.getByRole("heading", { name: "Privacy Policy" })).toBeVisible();
 });
