@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
-import { createSafeReporter, runSmoke, safeDestination, STAGING_ORIGIN } from "../apps/web/scripts/staging-auth-smoke.mjs";
+import { createSafeReporter, runSmoke, STAGING_ORIGIN } from "../apps/web/scripts/staging-auth-smoke.mjs";
 import { readStagingReleaseAttribution } from "./validate-staging-auth-attribution.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
@@ -18,6 +18,7 @@ function browserType(options = {}) {
     launchOptions: undefined,
     newPages: 0,
     protectedVisits: 0,
+    authenticatedProtectedVisits: 0,
     session: false,
     sessionCookieName: options.sessionCookieName ?? "__Secure-better-auth.session_token",
     signInAttempts: 0,
@@ -52,11 +53,6 @@ function browserType(options = {}) {
     let redirectPending;
     const listeners = { request: [], response: [] };
     const signInRequest = { url: () => `${STAGING_ORIGIN}/api/auth/sign-in/email`, method: () => "POST" };
-    function emitAuthRequest(path, method, status) {
-      const request = { url: () => `${STAGING_ORIGIN}${path}`, method: () => method };
-      for (const listener of listeners.request) listener(request);
-      if (status !== null) for (const listener of listeners.response) listener({ request: () => request, status: () => status });
-    }
 
     function scheduleSignInRedirect(pathname, search) {
       const signInUrl = `${STAGING_ORIGIN}/sign-in?next=${encodeURIComponent(`${pathname}${search}`)}`;
@@ -93,6 +89,9 @@ function browserType(options = {}) {
           state.protectedVisits += 1;
           if (options.unexpectedDuringCleanup && state.protectedVisits === 3) await interceptUnexpected("cleanup");
           if (state.session) {
+            state.authenticatedProtectedVisits += 1;
+            if (options.unexpectedAfterLogin && state.authenticatedProtectedVisits === 1) await interceptUnexpected("after-login");
+            if (options.unexpectedBetweenOperations && state.authenticatedProtectedVisits === 1) await interceptUnexpected("between-operations");
             currentUrl = `${STAGING_ORIGIN}${parsed.pathname}${parsed.search}`;
           } else if (options.delayedSignInRedirect) {
             currentUrl = `${STAGING_ORIGIN}${parsed.pathname}${parsed.search}`;
@@ -104,7 +103,12 @@ function browserType(options = {}) {
         }
         currentUrl = url;
       },
-      reload: async () => { if (options.unexpectedAfterLogin) await interceptUnexpected("after-login"); },
+      waitForResponse: (predicate) => {
+        if (options.signInResponseMissing || options.signInRequestMissing) return Promise.reject(new Error(options.errorText ?? "no login response"));
+        return new Promise((resolve) => {
+          listeners.response.push((response) => { if (predicate(response)) resolve(response); });
+        });
+      },
       waitForURL: async (predicate) => {
         if (!predicate(new URL(currentUrl)) && redirectPending) {
           state.streamedRedirectWaits += 1;
@@ -141,30 +145,13 @@ function browserType(options = {}) {
             }
             state.session = !options.sessionMissingAfterFailedLogin && !options.signInRequestMissing
               && !options.signInResponseMissing && (options.signInHttpStatus ?? 200) === 200;
-            if (options.sessionGetStatus !== undefined) emitAuthRequest("/api/auth/get-session", "GET", options.sessionGetStatus);
-            if (options.sessionRefreshStatus !== undefined) emitAuthRequest("/api/auth/get-session", "POST", options.sessionRefreshStatus);
-            if (options.profileGetStatus !== undefined) emitAuthRequest("/api/v1/profile/username", "GET", options.profileGetStatus);
-            if (options.settingsResponseStatus !== undefined) {
-              const request = {
-                url: () => `${STAGING_ORIGIN}/settings?smoke=auth&_rsc=private-password`,
-                method: () => "GET",
-                isNavigationRequest: () => options.settingsDocumentRequest ?? false,
-                resourceType: () => options.settingsDocumentRequest ? "document" : "fetch",
-              };
-              for (const listener of listeners.request) listener(request);
-              if (options.settingsResponseStatus !== null) {
-                for (const listener of listeners.response) listener({ request: () => request, status: () => options.settingsResponseStatus });
-              }
-            }
-            if (options.signInDestination) currentUrl = options.signInDestination;
-            else if (!options.loginNavigationFails && state.session) currentUrl = protectedUrl;
+            if (!options.loginNavigationFails && state.session) currentUrl = protectedUrl;
           } };
         }
-        if (locator.name === "Signing in…") return { isVisible: async () => options.submittingAtFailure ?? false };
         if (locator.name === "Sign out") {
           return {
             waitFor: async () => {
-              if (options.unexpectedDuringCleanupLocator && state.protectedVisits === 3) await interceptUnexpected("cleanup-locator");
+              if (options.unexpectedDuringCleanupLocator && state.protectedVisits >= 2) await interceptUnexpected("cleanup-locator");
               if (!state.session || new URL(currentUrl).pathname !== "/settings") {
                 if (redirectPending) await redirectPending;
                 throw new Error(options.errorText ?? "sign-out control unavailable");
@@ -187,7 +174,6 @@ function browserType(options = {}) {
     route: async (_pattern, handler) => { routeHandler = handler; },
     newPage: async () => {
       state.newPages += 1;
-      if (options.unexpectedBetweenOperations && state.newPages === 2) await interceptUnexpected("between-operations");
       return page();
     },
     cookies: async () => {
@@ -240,6 +226,8 @@ test("the default journey completes and launches Chromium without runner secrets
   assert.equal(result.passed, true);
   assert.equal(result.fake.state.signInAttempts, 1);
   assert.equal(result.fake.state.signOutAttempts, 1);
+  assert.equal(result.fake.state.newPages, 1);
+  assert.equal(result.fake.state.authenticatedProtectedVisits, 1);
   assert.equal(result.fake.state.sessionCookieName, "__Secure-better-auth.session_token");
   assert.equal(result.fake.state.browserClosed, true);
   assert.deepEqual(result.fake.state.launchOptions.env, { HOME: "/tmp/smoke", PATH: "/usr/bin" });
@@ -303,8 +291,8 @@ test("a streamed anonymous redirect exposes sign-in controls only after asynchro
 test("a streamed anonymous redirect is awaited for the initial and post-logout checks", async () => {
   const result = await runDefault({ delayedSignInRedirect: true });
   assert.equal(result.passed, true);
-  assert.ok(result.fake.state.streamedRedirects >= 3);
-  assert.ok(result.fake.state.streamedRedirectWaits >= 3);
+  assert.ok(result.fake.state.streamedRedirects >= 2);
+  assert.ok(result.fake.state.streamedRedirectWaits >= 2);
   assertNoSensitiveOutput(result);
 });
 
@@ -319,7 +307,7 @@ test("cleanup waits for a streamed anonymous redirect when a session disappears"
   assert.equal(result.fake.state.signOutAttempts, 0);
   assert.ok(result.fake.state.streamedRedirects >= 2);
   assert.ok(result.fake.state.streamedRedirectWaits >= 2);
-  assert.match(result.output, /step=journey outcome=failed .*category=login_cookie_missing/);
+  assert.match(result.output, /step=journey outcome=failed .*category=session_cookie_missing/);
   assert.match(result.output, /step=cleanup outcome=passed/);
   assertNoSensitiveOutput(result);
 });
@@ -333,85 +321,14 @@ test("a Cloudflare analytics abort cannot hide a phase-race external request", a
   assertNoSensitiveOutput(result);
 });
 
-test("destination labels are fixed and never contain browser URL data", () => {
-  const cases = [
-    [`${STAGING_ORIGIN}/settings?smoke=auth`, "settings_exact"],
-    [`${STAGING_ORIGIN}/settings?secret=private-password`, "settings_other"],
-    [`${STAGING_ORIGIN}/sign-in?next=%2Fsettings%3Fsmoke%3Dauth`, "sign_in_expected"],
-    [`${STAGING_ORIGIN}/sign-in?next=private-password`, "sign_in_other"],
-    [`${STAGING_ORIGIN}/auth/session-refresh?returnTo=%2Fsettings%3Fsmoke%3Dauth`, "session_refresh_expected"],
-    [`${STAGING_ORIGIN}/auth/session-refresh?returnTo=private-password`, "session_refresh_other"],
-    [`${STAGING_ORIGIN}/legal/acceptance?token=private-password`, "legal_acceptance"],
-    [`${STAGING_ORIGIN}/setup-username?next=private-password`, "setup_username"],
-    [`${STAGING_ORIGIN}/home?token=private-password`, "home"],
-    [`${STAGING_ORIGIN}/?token=private-password`, "landing"],
-    [`${STAGING_ORIGIN}/unrecognized/private-password`, "other_staging"],
-    ["https://private-password.example.test/path", "off_origin"],
-    ["private-password", "unknown"],
-  ];
-  for (const [url, label] of cases) assert.equal(safeDestination(url), label);
-  const output = [];
-  const report = createSafeReporter((line) => output.push(line));
-  report({ step: "diagnostic", outcome: "observed", durationMs: 0, phase: "login_failure", destination: "private-password" });
-  assert.match(output[0], /phase=login_failure destination=unknown$/);
-  assert.doesNotMatch(output[0], /private-password/);
-});
-
-test("login timeout reports fixed session request and submit phases", async () => {
-  const result = await runDefault({
-    loginNavigationFails: true,
-    submittingAtFailure: true,
-    sessionGetStatus: 200,
-    sessionRefreshStatus: 401,
-    profileGetStatus: 429,
-    settingsResponseStatus: 200,
-    errorText: "private-password",
-  });
-  assert.equal(result.passed, false);
-  assert.match(result.output, /phase=login_failure destination=sign_in_expected submit_state=pending session_get=success session_refresh=unauthorized profile_get=rate_limited settings_response=success settings_request=fetch/);
-  assertNoSensitiveOutput(result);
-});
-
-test("diagnostic reporter rejects unrecognized request outcomes", () => {
-  const lines = [];
-  createSafeReporter((line) => lines.push(line))({
-    step: "diagnostic", outcome: "observed", durationMs: 0, phase: "login_failure", destination: "sign_in_expected",
-    progress: { submitState: "private-password", sessionGet: "private-password", sessionRefresh: "private-password", profileGet: "private-password", settingsResponse: "private-password", settingsRequest: "private-password" },
-  });
-  assert.match(lines[0], /submit_state=unknown session_get=unknown session_refresh=unknown profile_get=unknown settings_response=unknown settings_request=unknown$/);
-  assert.doesNotMatch(lines[0], /private-password/);
-});
-
-test("a requested Settings document without a response is distinct from no attempt", async () => {
-  const result = await runDefault({ loginNavigationFails: true, settingsDocumentRequest: true, settingsResponseStatus: null });
-  assert.equal(result.passed, false);
-  assert.match(result.output, /settings_response=no_response settings_request=document/);
-  assertNoSensitiveOutput(result);
-});
-
-test("failed navigation reports a fixed destination before cleanup changes the page", async () => {
-  const result = await runDefault({ signInDestination: `${STAGING_ORIGIN}/legal/acceptance?token=private-password` });
-  assert.equal(result.passed, false);
-  assert.match(result.output, /step=diagnostic .*phase=login_failure destination=legal_acceptance/);
-  assert.match(result.output, /category=login_cookie_created_navigation_timeout/);
-  assert.match(result.output, /step=cleanup outcome=passed/);
-  assertNoSensitiveOutput(result);
-});
-
-test("failed cleanup reports its final destination without exposing a query", async () => {
-  const result = await runDefault({ signOutFails: true, errorText: "private-password" });
-  assert.equal(result.passed, false);
-  assert.match(result.output, /step=diagnostic .*phase=cleanup_failure destination=settings_exact/);
-  assertNoSensitiveOutput(result);
-});
-
-test("a session created before failed sign-in navigation is cleaned up once", async () => {
+test("client-side return navigation may stall while fresh protected access and logout succeed", async () => {
   const result = await runDefault({ loginNavigationFails: true, errorText: "login private-password session=private-cookie" });
-  assert.equal(result.passed, false);
+  assert.equal(result.passed, true);
   assert.equal(result.fake.state.session, false);
   assert.equal(result.fake.state.signInAttempts, 1);
+  assert.equal(result.fake.state.authenticatedProtectedVisits, 1);
   assert.equal(result.fake.state.signOutAttempts, 1);
-  assert.match(result.output, /category=login_cookie_created_navigation_timeout/);
+  assert.match(result.output, /step=journey outcome=passed/);
   assert.match(result.output, /step=cleanup outcome=passed/);
   assertNoSensitiveOutput(result);
 });
@@ -423,8 +340,7 @@ test("failed sign-in reports only a fixed network or cookie category", async () 
     [{ signInHttpStatus: 401 }, "login_http_401"],
     [{ signInHttpStatus: 429 }, "login_http_429"],
     [{ signInHttpStatus: 503 }, "login_http_error"],
-    [{ sessionMissingAfterFailedLogin: true }, "login_cookie_missing"],
-    [{ loginNavigationFails: true }, "login_cookie_created_navigation_timeout"],
+    [{ sessionMissingAfterFailedLogin: true }, "session_cookie_missing"],
   ];
   for (const [options, expected] of cases) {
     const result = await runDefault({ ...options, loginNavigationFails: true,
@@ -444,6 +360,14 @@ test("cleanup accepts a queried sign-in URL when no session was created", async 
   assert.equal(result.fake.state.signOutAttempts, 0);
   assert.match(result.output, /category=login_http_401/);
   assert.match(result.output, /step=cleanup outcome=passed/);
+  assertNoSensitiveOutput(result);
+});
+
+test("a response without a session cookie still fails protected access proof", async () => {
+  const result = await runDefault({ sessionMissingAfterFailedLogin: true });
+  assert.equal(result.passed, false);
+  assert.equal(result.fake.state.authenticatedProtectedVisits, 0);
+  assert.match(result.output, /category=session_cookie_missing/);
   assertNoSensitiveOutput(result);
 });
 
