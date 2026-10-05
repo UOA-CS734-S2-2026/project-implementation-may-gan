@@ -194,10 +194,16 @@ test("an anonymous visitor can browse a synthetic public profile and safely retu
   await visitor.getByRole("link", { name: "like" }).click();
   await expect(visitor).toHaveURL(/intent%3Dlike/);
   await visitor.goBack();
+  await expect(visitor).toHaveURL(new RegExp(`/u/${username}/${postId}$`));
+  await expect(visitor.getByText("Synthetic released public dayli.")).toBeVisible();
   await visitor.getByRole("link", { name: "comment" }).click();
   await expect(visitor).toHaveURL(/intent%3Dcomment/);
   await visitor.goBack();
+  await expect(visitor).toHaveURL(new RegExp(`/u/${username}/${postId}$`));
+  await expect(visitor.getByText("Synthetic released public dayli.")).toBeVisible();
   await visitor.goBack();
+  await expect(visitor).toHaveURL(new RegExp(`/u/${username}$`));
+  await expect(visitor.getByRole("heading", { name: "Public E2E" })).toBeVisible();
 
   await visitor.getByRole("link", { name: "message" }).click();
   await expect(visitor).toHaveURL(new RegExp(`/sign-in\\?next=.*message-request`));
@@ -205,8 +211,11 @@ test("an anonymous visitor can browse a synthetic public profile and safely retu
   await visitor.getByRole("link", { name: "add friend" }).click();
   await expect(visitor).toHaveURL(new RegExp(`/sign-in\\?next=.*${username}`));
   await visitor.goBack();
+  await expect(visitor).toHaveURL(new RegExp(`/u/${username}$`));
   await expect(visitor.getByRole("heading", { name: "Public E2E" })).toBeVisible();
   await visitor.goForward();
+  await expect(visitor).toHaveURL(new RegExp(`/sign-in\\?next=.*${username}`));
+  await expect(visitor.getByLabel("Email")).toBeVisible();
   const failedContext = await browser.newContext();
   const failedSignIn = await failedContext.newPage();
   await failedSignIn.goto(`/sign-in?next=${encodeURIComponent(`/u/${username}?intent=friend-request`)}`);
@@ -242,17 +251,21 @@ test("an anonymous visitor can browse a synthetic public profile and safely retu
   await visitor.getByRole("textbox", { name: "Add a comment" }).fill(commentText);
   await visitor.getByRole("button", { name: "Post", exact: true }).click();
   await expect(visitor.getByText(commentText)).toBeVisible();
-  const exactCounts = async () => visitor.evaluate(async ({ api, id }) => {
-    const detail = await fetch(`${api}/api/v1/posts/${id}`, { credentials: "include" });
-    const likes = await fetch(`${api}/api/v1/posts/${id}/likes`, { credentials: "include" });
-    const comments = await fetch(`${api}/api/v1/posts/${id}/comments`, { credentials: "include" });
-    if (!detail.ok || !likes.ok || !comments.ok) throw new Error(`Count read failed: ${detail.status}/${likes.status}/${comments.status}`);
-    return { detail: await detail.json(), likes: await likes.json(), comments: await comments.json() } as {
-      detail: { likeCount: number; commentCount: number };
-      likes: { items: unknown[] };
-      comments: { items: Array<{ text: string }> };
+  const exactCounts = async () => {
+    const [detailResponse, likesResponse, commentsResponse] = await Promise.all([
+      visitor.request.get(`${apiOrigin}/api/v1/posts/${postId}`),
+      visitor.request.get(`${apiOrigin}/api/v1/posts/${postId}/likes`),
+      visitor.request.get(`${apiOrigin}/api/v1/posts/${postId}/comments`),
+    ]);
+    if (!detailResponse.ok() || !likesResponse.ok() || !commentsResponse.ok()) {
+      throw new Error(`Count read failed: ${detailResponse.status()}/${likesResponse.status()}/${commentsResponse.status()}`);
+    }
+    return {
+      detail: await detailResponse.json() as { likeCount: number; commentCount: number },
+      likes: await likesResponse.json() as { items: unknown[] },
+      comments: await commentsResponse.json() as { items: Array<{ text: string }> },
     };
-  }, { api: apiOrigin, id: postId });
+  };
   await expect.poll(async () => {
     const current = await exactCounts();
     return {
@@ -263,8 +276,14 @@ test("an anonymous visitor can browse a synthetic public profile and safely retu
   }).toEqual({ detail: expect.objectContaining({ likeCount: 1, commentCount: 1 }), likes: 1, comments: 1 });
   let counts = await exactCounts();
   await visitor.reload();
+  await expect(visitor).toHaveURL(new RegExp(`/u/${username}/${postId}$`));
+  await expect(visitor.getByText("Synthetic released public dayli.")).toBeVisible();
   await visitor.goBack();
+  await expect(visitor).toHaveURL(new RegExp(`/u/${username}$`));
+  await expect(visitor.getByRole("heading", { name: "Public E2E" })).toBeVisible();
   await visitor.goForward();
+  await expect(visitor).toHaveURL(new RegExp(`/u/${username}/${postId}$`));
+  await expect(visitor.getByText("Synthetic released public dayli.")).toBeVisible();
   counts = await exactCounts();
   expect(counts.detail).toMatchObject({ likeCount: 1, commentCount: 1 });
   expect(counts.likes.items).toHaveLength(1);
@@ -345,7 +364,11 @@ test("an anonymous visitor can browse a synthetic public profile and safely retu
     `/api/v1/posts/${postId}/comments`,
   ]) expect((await friend.request.get(`${apiOrigin}${route}`)).status()).toBe(404);
   await friend.goBack();
+  await expect(friend).toHaveURL(new RegExp(`/u/${username}$`));
+  await expect(friend.getByRole("heading", { name: "This profile is unavailable" })).toBeVisible();
   await friend.goForward();
+  await expect(friend).toHaveURL(new RegExp(`/u/${username}/${postId}$`));
+  await expect(friend.getByText(/isn't available|not found/i)).toBeVisible();
   expect(await friend.locator("body").innerText()).not.toContain("Synthetic released public dayli.");
 
   const unblocked = await page.evaluate(async ({ api, id }) => fetch(`${api}/api/v1/relationships/${id}/block`, { method: "DELETE", credentials: "include" }).then((response) => response.status), { api: apiOrigin, id: viewerId });
@@ -375,7 +398,11 @@ test("an anonymous visitor can browse a synthetic public profile and safely retu
   await restrictedVisitor.reload();
   await expect(restrictedVisitor.getByText("Synthetic released public dayli.")).toHaveCount(0);
   await restrictedVisitor.goBack();
+  await expect(restrictedVisitor.locator("body")).toBeVisible();
+  expect(await restrictedVisitor.locator("body").innerText()).not.toContain("Synthetic released public dayli.");
   await restrictedVisitor.goForward();
+  await expect(restrictedVisitor).toHaveURL(new RegExp(`/u/${username}/${postId}$`));
+  await expect(restrictedVisitor.getByText(/isn't available|not found/i)).toBeVisible();
   expect(await restrictedVisitor.locator("body").innerText()).not.toContain("Synthetic released public dayli.");
 
   await Promise.all([anonymous.close(), restrictedContext.close()]);
