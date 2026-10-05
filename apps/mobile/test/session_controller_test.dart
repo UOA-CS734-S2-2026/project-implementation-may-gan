@@ -570,6 +570,76 @@ void main() {
     },
   );
 
+  for (final staleStatus in [401, 200]) {
+    test(
+      'a delayed Alice policy response $staleStatus cannot replace Bob',
+      () async {
+        final tokens = MemoryTokenStore()..value = 'alice-token';
+        final response = Completer<http.Response>();
+        var alicePolicyReads = 0;
+        final session = SessionController(
+          session: BetterAuthNativeSession(
+            baseUrl: 'https://api.example.test',
+            tokenStore: tokens,
+            client: MockClient((request) async {
+              final path = request.url.path;
+              final bearer = request.headers['authorization'];
+              if (path.endsWith('/get-session')) {
+                final bob = bearer == 'Bearer bob-token';
+                return http.Response(
+                  jsonEncode({
+                    'user': {
+                      'id': bob ? 'bob' : 'alice',
+                      'name': bob ? 'Bob' : 'Alice',
+                      'email': bob ? 'bob@example.test' : 'alice@example.test',
+                      'username': bob ? 'bob' : 'alice',
+                    },
+                  }),
+                  200,
+                );
+              }
+              if (path.endsWith('/api/v1/account/status')) {
+                if (bearer == 'Bearer alice-token' && ++alicePolicyReads == 2) {
+                  return response.future;
+                }
+                return http.Response('{"restriction":"active"}', 200);
+              }
+              if (path.endsWith('/sign-out')) return http.Response('{}', 200);
+              if (path.endsWith('/sign-in/email')) {
+                return http.Response(
+                  '{}',
+                  200,
+                  headers: {'set-auth-token': 'bob-token'},
+                );
+              }
+              return http.Response('{}', 404);
+            }),
+          ),
+          tokenStore: tokens,
+          userCache: MemoryUserCache(),
+          drafts: MemoryDraftStore(),
+        );
+        await session.restore();
+        final aliceRefresh = session.refreshAccountPolicy();
+        await Future<void>.delayed(Duration.zero);
+        await session.signIn(
+          email: 'bob@example.test',
+          password: 'correct-password',
+        );
+        response.complete(
+          http.Response(
+            staleStatus == 401 ? '{}' : '{"restriction":"terms_blocked"}',
+            staleStatus,
+          ),
+        );
+        await aliceRefresh;
+        expect(session.status, SessionStatus.signedIn);
+        expect(session.user?.id, 'bob');
+        expect(await tokens.read(), 'bob-token');
+      },
+    );
+  }
+
   test('an authenticated ordinary API 403 refreshes Terms policy', () async {
     final tokens = MemoryTokenStore()..value = 'token-1';
     final users = MemoryUserCache();

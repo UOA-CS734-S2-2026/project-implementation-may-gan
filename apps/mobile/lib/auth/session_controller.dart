@@ -230,7 +230,11 @@ class SessionController extends ChangeNotifier {
     }
     final active = _policyRefresh;
     if (active != null) return active;
-    final refresh = _applyAccountPolicy(user, persistUser: false);
+    final refresh = _applyAccountPolicy(
+      user,
+      persistUser: false,
+      requireCurrentUser: true,
+    );
     _policyRefresh = refresh;
     return refresh.whenComplete(() {
       if (identical(_policyRefresh, refresh)) _policyRefresh = null;
@@ -457,12 +461,19 @@ class SessionController extends ChangeNotifier {
   Future<void> _applyAccountPolicy(
     SessionUser user, {
     required bool persistUser,
+    bool requireCurrentUser = false,
   }) async {
+    final generation = _sessionGeneration;
+    bool isCurrent() =>
+        _sessionGeneration == generation &&
+        (!requireCurrentUser || _user?.id == user.id);
     if (persistUser) await _userCache.write(user);
+    if (!isCurrent()) return;
     AccountPolicyStatus policy;
     try {
       policy = await _session.accountPolicy();
     } on AuthenticationFailure catch (error) {
+      if (!isCurrent()) return;
       if (error.statusCode == 401) {
         await _signedOutLocally();
         return;
@@ -470,9 +481,11 @@ class SessionController extends ChangeNotifier {
       _set(SessionStatus.legalStatusUnavailable, user);
       return;
     } on Exception {
+      if (!isCurrent()) return;
       _set(SessionStatus.legalStatusUnavailable, user);
       return;
     }
+    if (!isCurrent()) return;
     if (policy.requiresLegalAcceptance) {
       _set(SessionStatus.legalAcceptanceRequired, user);
       return;
@@ -529,6 +542,7 @@ class SessionController extends ChangeNotifier {
   void _invalidateSessionStartup() {
     _sessionGeneration++;
     _startedSessionUserId = null;
+    _policyRefresh = null;
   }
 
   void _set(SessionStatus status, SessionUser? user) {

@@ -54,7 +54,10 @@ export default function LegalAcceptancePage() {
       router.replace("/home");
     } catch (reason) {
       setAccepted(false);
-      if (reason instanceof LegalAcceptanceError && reason.status === 409) {
+      if (reason instanceof LegalAcceptanceError && reason.status === 401) {
+        await refresh().catch(() => {});
+        router.replace("/sign-in?next=%2Flegal%2Facceptance");
+      } else if (reason instanceof LegalAcceptanceError && reason.status === 409) {
         setError("The Terms have changed. Review the current documents and try again.");
         void load();
       } else {

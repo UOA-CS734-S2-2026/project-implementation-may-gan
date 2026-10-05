@@ -603,6 +603,7 @@ class TestHarness {
     this.uploadMedia = true,
     this.effectiveTerms = false,
     this.accountRestriction = 'active',
+    this.acceptanceExpired = false,
     this.accountExports,
     this.notificationConsent,
     FakeProfileClient? profiles,
@@ -721,6 +722,7 @@ class TestHarness {
         );
       }
       if (path.endsWith('/api/v1/legal/acceptance')) {
+        if (acceptanceExpired) return http.Response('{}', 401);
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         if (body['termsVersionId'] != 'test-terms' ||
             body['acceptedTermsAndDeclaredAge16'] != true) {
@@ -811,6 +813,7 @@ class TestHarness {
   final bool uploadMedia;
   final bool effectiveTerms;
   String accountRestriction;
+  bool acceptanceExpired;
   final AccountExportClient? accountExports;
   final NotificationConsentController? notificationConsent;
   final GoogleIdTokenProvider? google;

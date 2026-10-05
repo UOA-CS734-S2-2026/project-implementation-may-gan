@@ -14,7 +14,11 @@ export function LegalAcceptanceGate({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     let active = true;
-    if (isPending || !user) return;
+    if (isPending) return;
+    if (!user) {
+      router.replace(`/sign-in?next=${encodeURIComponent(pathname)}`);
+      return;
+    }
     void readAccountPolicy().then((policy) => {
       if (!active) return;
       if (policy.restriction === "terms_blocked" || policy.restriction === "age_declaration_blocked") {

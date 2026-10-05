@@ -83,9 +83,14 @@ class _LegalAcceptanceScreenState extends State<LegalAcceptanceScreen> {
       _busy = true;
       _error = null;
     });
+    final session = AppScope.of(context).session;
     try {
-      await AppScope.of(context).session.acceptCurrentLegalTerms(terms);
+      await session.acceptCurrentLegalTerms(terms);
     } on AuthenticationFailure catch (error) {
+      if (error.statusCode == 401) {
+        await session.sessionExpired();
+        return;
+      }
       if (!mounted) return;
       setState(() {
         _accepted = false;

@@ -53,6 +53,27 @@ void main() {
     },
   );
 
+  testWidgets('expired acceptance sends the account back to sign-in', (
+    tester,
+  ) async {
+    final harness = TestHarness(
+      effectiveTerms: true,
+      accountRestriction: 'terms_blocked',
+      acceptanceExpired: true,
+    )..tokens.value = 'token-1';
+    await tester.pumpWidget(
+      DayliApp(services: harness.services, useGoogleFonts: false),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('legal.acceptanceAction')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('legal.acceptanceSubmit')));
+    await tester.pumpAndSettle();
+    expect(harness.session.status, SessionStatus.signedOut);
+    expect(harness.tokens.value, isNull);
+    expect(find.byKey(const Key('legal.acceptanceAction')), findsNothing);
+  });
+
   testWidgets('blocked accounts can still sign out', (tester) async {
     final harness = TestHarness(
       effectiveTerms: true,
