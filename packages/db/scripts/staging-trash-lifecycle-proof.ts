@@ -140,6 +140,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function nonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
+export function requireProofNonEmptyString(diagnostic: ProtocolDiagnostic, value: unknown): string {
+  if (!nonEmptyString(value)) return failGuard(diagnostic, "invalid_response_contract");
+  return value;
+}
+
 export function requireProofRecordValue(diagnostic: ProtocolDiagnostic, value: unknown): Record<string, unknown> {
   if (!isRecord(value)) return failGuard(diagnostic, "invalid_response_contract");
   return value;
@@ -200,10 +209,11 @@ async function createFixture(origin: string, token: string, marker: string, ordi
     method: "POST", headers: { ...authorization, "content-type": "application/json" },
     body: JSON.stringify({ contentType: "image/jpeg", byteSize: jpeg.byteLength }),
   }, 201)).body;
+  const reservationId = requireProofNonEmptyString(diagnostic, reservation.id);
   const reservationUpload = requireProofRecordValue(diagnostic, reservation.upload);
+  const uploadUrl = requireProofNonEmptyString(diagnostic, reservationUpload.url);
   const requiredHeaders = requireProofRecordValue(diagnostic, reservationUpload.requiredHeaders);
-  if (typeof reservation.id !== "string" || reservationUpload.method !== "PUT" ||
-      typeof reservationUpload.url !== "string" ||
+  if (reservationUpload.method !== "PUT" ||
       !Object.values(requiredHeaders).every((value) => typeof value === "string")) {
     return failGuard(diagnostic, "invalid_response_contract");
   }
@@ -212,41 +222,41 @@ async function createFixture(origin: string, token: string, marker: string, ordi
   diagnostic.httpStatus = null;
   diagnostic.guardType = null;
   let upload: Response;
-  try { upload = await fetch(reservationUpload.url as string, { method: "PUT", headers: uploadHeaders, body: jpeg }); }
+  try { upload = await fetch(uploadUrl, { method: "PUT", headers: uploadHeaders, body: jpeg }); }
   catch { return failGuard(diagnostic, "transport_failure"); }
   diagnostic.httpStatus = upload.status;
   if (!upload.ok) return failGuard(diagnostic, "unexpected_http_status");
-  const complete = (await requestProofRecord(diagnostic, "media_complete", origin, `/api/v1/media-reservations/${encodeURIComponent(reservation.id)}/complete`, {
+  const complete = (await requestProofRecord(diagnostic, "media_complete", origin, `/api/v1/media-reservations/${encodeURIComponent(reservationId)}/complete`, {
     method: "POST", headers: authorization,
   })).body;
   if (complete.status !== "validated") return failGuard(diagnostic, "invalid_response_contract");
   const day = (await requestProofRecord(
     diagnostic, "posting_day", origin, "/api/v1/posting-days/current", { headers: authorization },
   )).body;
+  const localDate = requireProofNonEmptyString(diagnostic, day.localDate);
   const prompt = requireProofRecordValue(diagnostic, day.prompt);
-  if (typeof day.localDate !== "string" || typeof prompt.id !== "string") {
-    return failGuard(diagnostic, "invalid_response_contract");
-  }
+  const promptId = requireProofNonEmptyString(diagnostic, prompt.id);
   const created = (await requestProofRecord(diagnostic, "post_create", origin, "/api/v1/posts", {
     method: "POST",
     headers: { ...authorization, "content-type": "application/json", "idempotency-key": randomUUID() },
     body: JSON.stringify({
-      localDate: day.localDate,
-      promptId: prompt.id,
+      localDate,
+      promptId,
       reflectiveAnswer: `${marker}:${ordinal}`,
       rating: 5,
       audience: "solo",
-      attachments: [reservation.id],
+      attachments: [reservationId],
     }),
   }, 201)).body;
-  if (typeof created.id !== "string" || typeof created.authorId !== "string" || !Array.isArray(created.media) ||
-      created.media.length !== 1) return failGuard(diagnostic, "invalid_response_contract");
-  const media = requireProofRecordValue(diagnostic, created.media[0]);
-  if (typeof media.id !== "string") {
+  const postId = requireProofNonEmptyString(diagnostic, created.id);
+  const ownerId = requireProofNonEmptyString(diagnostic, created.authorId);
+  if (!Array.isArray(created.media) || created.media.length !== 1) {
     return failGuard(diagnostic, "invalid_response_contract");
   }
-  const fixture = { ownerId: created.authorId, postId: created.id, mediaId: media.id,
-    reservationId: reservation.id, objectKey: `media/${created.authorId}/${reservation.id}`, generation: 0 };
+  const media = requireProofRecordValue(diagnostic, created.media[0]);
+  const mediaId = requireProofNonEmptyString(diagnostic, media.id);
+  const fixture = { ownerId, postId, mediaId, reservationId,
+    objectKey: `media/${ownerId}/${reservationId}`, generation: 0 };
   if (await objectIsAbsent(fixture.objectKey, diagnostic, "object_pretrash_head")) {
     return failGuard(diagnostic, "storage_presence_mismatch");
   }

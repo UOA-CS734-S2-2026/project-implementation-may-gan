@@ -8,6 +8,7 @@ import {
   discoverExpectedMigrationLedger,
   requestProofJson,
   requestProofRecord,
+  requireProofNonEmptyString,
   requireProofRecordValue,
   validateMarker,
   validateProofTarget,
@@ -151,6 +152,18 @@ test("classifies valid JSON non-record response shapes without dereferencing the
     assert.throws(() => requireProofRecordValue(diagnostic, nested));
     assert.deepEqual(diagnostic, { operation, httpStatus: 200, guardType: "invalid_response_contract" });
   }
+});
+
+test("preserves non-empty guards for required protocol identifiers and dates", () => {
+  for (const operation of ["media_reserve", "posting_day", "post_create"] as const) {
+    const diagnostic = { operation, httpStatus: 200, guardType: null };
+    assert.throws(() => requireProofNonEmptyString(diagnostic, ""));
+    assert.deepEqual(diagnostic, { operation, httpStatus: 200, guardType: "invalid_response_contract" });
+  }
+
+  const diagnostic = { operation: "post_create" as const, httpStatus: 201, guardType: null };
+  assert.equal(requireProofNonEmptyString(diagnostic, "non-empty-id"), "non-empty-id");
+  assert.deepEqual(diagnostic, { operation: "post_create", httpStatus: 201, guardType: null });
 });
 
 test("maps proof phases to sanitized failure categories", () => {
