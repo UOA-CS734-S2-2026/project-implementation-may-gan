@@ -10,7 +10,14 @@ import '../drafts/draft_store.dart';
 import 'native_session.dart';
 import 'public_return_intent.dart';
 
-enum SessionStatus { unknown, signedOut, needsUsernameSetup, signedIn }
+enum SessionStatus {
+  unknown,
+  signedOut,
+  legalAcceptanceRequired,
+  legalStatusUnavailable,
+  needsUsernameSetup,
+  signedIn,
+}
 
 /// A capability passed to async startup work. It becomes invalid before old
 /// credentials are replaced or cleared, so late startup cannot affect a new
@@ -112,6 +119,7 @@ class SessionController extends ChangeNotifier {
   SessionUser? _user;
   String? _startedSessionUserId;
   int _sessionGeneration = 0;
+  Future<void>? _policyRefresh;
   final PublicReturnIntentRegistry _publicReturnIntents =
       PublicReturnIntentRegistry();
 
@@ -181,7 +189,7 @@ class SessionController extends ChangeNotifier {
       } else {
         // A cached authenticated identity still needs the foreground socket.
         // Its ticket request will reconnect with backoff when the network returns.
-        await _signedIn(cached, persistUser: false);
+        await _signedIn(cached, persistUser: false, verifyPolicy: false);
       }
       return;
     }
@@ -205,6 +213,53 @@ class SessionController extends ChangeNotifier {
     required String flow,
     required RegistrationTerms? terms,
   }) => _session.issueRegistrationProof(flow: flow, terms: terms);
+
+  Future<void> acceptCurrentLegalTerms(RegistrationTerms terms) async {
+    await _session.recordLegalAcceptance(terms);
+    await refreshAccountPolicy();
+  }
+
+  /// Rechecks the server-owned policy after acceptance or a temporary outage.
+  /// Concurrent foreground and rejected-request checks share one request.
+  Future<void> refreshAccountPolicy() {
+    final user = _user;
+    if (user == null) {
+      return Future<void>.error(
+        const AuthenticationFailure('account-policy', 401),
+      );
+    }
+    final active = _policyRefresh;
+    if (active != null) return active;
+    final refresh = _applyAccountPolicy(
+      user,
+      persistUser: false,
+      requireCurrentUser: true,
+    );
+    _policyRefresh = refresh;
+    return refresh.whenComplete(() {
+      if (identical(_policyRefresh, refresh)) _policyRefresh = null;
+    });
+  }
+
+  /// Called whenever the app returns to the foreground. A cached offline
+  /// identity is provisional: reconnecting must obtain the current server
+  /// policy before ordinary screens remain available.
+  void refreshAccountPolicyOnForeground() {
+    if (_user == null ||
+        (_status != SessionStatus.signedIn &&
+            _status != SessionStatus.needsUsernameSetup &&
+            _status != SessionStatus.legalStatusUnavailable)) {
+      return;
+    }
+    unawaited(refreshAccountPolicy());
+  }
+
+  /// Called by authenticated API adapters for a 403. A policy refresh decides
+  /// whether this was ordinary resource denial or newly effective Terms.
+  void authenticatedApiForbidden() {
+    if (_user == null || _status == SessionStatus.signedOut) return;
+    unawaited(refreshAccountPolicy());
+  }
 
   Future<void> signUp({
     required String name,
@@ -385,10 +440,60 @@ class SessionController extends ChangeNotifier {
     await _signedIn(user);
   }
 
-  Future<void> _signedIn(SessionUser user, {bool persistUser = true}) async {
+  Future<void> _signedIn(
+    SessionUser user, {
+    bool persistUser = true,
+    bool verifyPolicy = true,
+  }) async {
     // Interactive account replacement already completed its private cleanup
     // under the old bearer in _beforeCredentialReplacement.
     if (persistUser) await _userCache.write(user);
+    if (verifyPolicy) {
+      await _applyAccountPolicy(user, persistUser: false);
+    } else {
+      // Offline restoration cannot obtain a server policy decision. It keeps
+      // local drafts usable; the server still rejects ordinary API actions
+      // until connectivity returns and a later authenticated restore checks it.
+      await _activateUser(user);
+    }
+  }
+
+  Future<void> _applyAccountPolicy(
+    SessionUser user, {
+    required bool persistUser,
+    bool requireCurrentUser = false,
+  }) async {
+    final generation = _sessionGeneration;
+    bool isCurrent() =>
+        _sessionGeneration == generation &&
+        (!requireCurrentUser || _user?.id == user.id);
+    if (persistUser) await _userCache.write(user);
+    if (!isCurrent()) return;
+    AccountPolicyStatus policy;
+    try {
+      policy = await _session.accountPolicy();
+    } on AuthenticationFailure catch (error) {
+      if (!isCurrent()) return;
+      if (error.statusCode == 401) {
+        await _signedOutLocally();
+        return;
+      }
+      _set(SessionStatus.legalStatusUnavailable, user);
+      return;
+    } on Exception {
+      if (!isCurrent()) return;
+      _set(SessionStatus.legalStatusUnavailable, user);
+      return;
+    }
+    if (!isCurrent()) return;
+    if (policy.requiresLegalAcceptance) {
+      _set(SessionStatus.legalAcceptanceRequired, user);
+      return;
+    }
+    await _activateUser(user);
+  }
+
+  Future<void> _activateUser(SessionUser user) async {
     _set(
       user.username == null
           ? SessionStatus.needsUsernameSetup
@@ -437,6 +542,7 @@ class SessionController extends ChangeNotifier {
   void _invalidateSessionStartup() {
     _sessionGeneration++;
     _startedSessionUserId = null;
+    _policyRefresh = null;
   }
 
   void _set(SessionStatus status, SessionUser? user) {

@@ -226,6 +226,39 @@ void main() {
   );
 
   test(
+    'sends versioned explicit acceptance with the authenticated bearer',
+    () async {
+      final tokenStore = MemorySessionTokenStore()..value = 'session-token';
+      late http.Request request;
+      final session = BetterAuthNativeSession(
+        baseUrl: 'https://api.example.test',
+        tokenStore: tokenStore,
+        client: MockClient((next) async {
+          request = next;
+          return http.Response('{"termsVersionId":"terms-v1"}', 200);
+        }),
+      );
+
+      await session.recordLegalAcceptance(
+        const RegistrationTerms(
+          versionId: 'terms-v1',
+          contentDigest:
+              'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        ),
+      );
+
+      expect(request.url.path, '/api/v1/legal/acceptance');
+      expect(request.headers['authorization'], 'Bearer session-token');
+      expect(jsonDecode(request.body), {
+        'termsVersionId': 'terms-v1',
+        'termsContentDigest':
+            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        'acceptedTermsAndDeclaredAge16': true,
+      });
+    },
+  );
+
+  test(
     'rejects a changed or invalid proof before creating a native account',
     () async {
       final requests = <http.Request>[];

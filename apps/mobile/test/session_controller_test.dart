@@ -6,6 +6,7 @@ import 'package:dayli_mobile/auth/session_controller.dart';
 
 import 'dart:convert';
 
+import 'package:dayli_mobile/api/posting_day_client.dart';
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';
 import 'package:dayli_mobile/messaging/messaging_controller.dart';
 import 'package:dayli_mobile/notifications/push_service.dart';
@@ -524,6 +525,175 @@ void main() {
   );
 
   test(
+    'offline cached restore refreshes Terms policy after foreground recovery',
+    () async {
+      final tokens = MemoryTokenStore()..value = 'cached-token';
+      final users = MemoryUserCache()
+        ..value = const SessionUser(
+          id: 'cached-user',
+          name: 'Cached',
+          email: 'cached@example.test',
+          username: 'cached',
+        );
+      var offline = true;
+      final session = SessionController(
+        session: BetterAuthNativeSession(
+          baseUrl: 'https://api.example.test',
+          tokenStore: tokens,
+          client: MockClient((request) async {
+            if (request.url.path.endsWith('/get-session') && offline) {
+              throw http.ClientException('offline');
+            }
+            if (request.url.path.endsWith('/api/v1/account/status')) {
+              return http.Response(
+                jsonEncode({
+                  'restriction': offline ? 'active' : 'terms_blocked',
+                }),
+                200,
+              );
+            }
+            return http.Response('{}', 404);
+          }),
+        ),
+        tokenStore: tokens,
+        userCache: users,
+        drafts: MemoryDraftStore(),
+      );
+
+      await session.restore();
+      expect(session.status, SessionStatus.signedIn);
+
+      offline = false;
+      session.refreshAccountPolicyOnForeground();
+      await Future<void>.delayed(Duration.zero);
+      expect(session.status, SessionStatus.legalAcceptanceRequired);
+    },
+  );
+
+  for (final staleStatus in [401, 200]) {
+    test(
+      'a delayed Alice policy response $staleStatus cannot replace Bob',
+      () async {
+        final tokens = MemoryTokenStore()..value = 'alice-token';
+        final response = Completer<http.Response>();
+        var alicePolicyReads = 0;
+        final session = SessionController(
+          session: BetterAuthNativeSession(
+            baseUrl: 'https://api.example.test',
+            tokenStore: tokens,
+            client: MockClient((request) async {
+              final path = request.url.path;
+              final bearer = request.headers['authorization'];
+              if (path.endsWith('/get-session')) {
+                final bob = bearer == 'Bearer bob-token';
+                return http.Response(
+                  jsonEncode({
+                    'user': {
+                      'id': bob ? 'bob' : 'alice',
+                      'name': bob ? 'Bob' : 'Alice',
+                      'email': bob ? 'bob@example.test' : 'alice@example.test',
+                      'username': bob ? 'bob' : 'alice',
+                    },
+                  }),
+                  200,
+                );
+              }
+              if (path.endsWith('/api/v1/account/status')) {
+                if (bearer == 'Bearer alice-token' && ++alicePolicyReads == 2) {
+                  return response.future;
+                }
+                return http.Response('{"restriction":"active"}', 200);
+              }
+              if (path.endsWith('/sign-out')) return http.Response('{}', 200);
+              if (path.endsWith('/sign-in/email')) {
+                return http.Response(
+                  '{}',
+                  200,
+                  headers: {'set-auth-token': 'bob-token'},
+                );
+              }
+              return http.Response('{}', 404);
+            }),
+          ),
+          tokenStore: tokens,
+          userCache: MemoryUserCache(),
+          drafts: MemoryDraftStore(),
+        );
+        await session.restore();
+        final aliceRefresh = session.refreshAccountPolicy();
+        await Future<void>.delayed(Duration.zero);
+        await session.signIn(
+          email: 'bob@example.test',
+          password: 'correct-password',
+        );
+        response.complete(
+          http.Response(
+            staleStatus == 401 ? '{}' : '{"restriction":"terms_blocked"}',
+            staleStatus,
+          ),
+        );
+        await aliceRefresh;
+        expect(session.status, SessionStatus.signedIn);
+        expect(session.user?.id, 'bob');
+        expect(await tokens.read(), 'bob-token');
+      },
+    );
+  }
+
+  test('an authenticated ordinary API 403 refreshes Terms policy', () async {
+    final tokens = MemoryTokenStore()..value = 'token-1';
+    final users = MemoryUserCache();
+    var termsEffective = false;
+    final native = BetterAuthNativeSession(
+      baseUrl: 'https://api.example.test',
+      tokenStore: tokens,
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/get-session')) {
+          return http.Response(
+            jsonEncode({
+              'user': {
+                'id': 'user-1',
+                'name': 'User',
+                'email': 'user@example.test',
+                'username': 'user',
+              },
+            }),
+            200,
+          );
+        }
+        if (request.url.path.endsWith('/api/v1/account/status')) {
+          return http.Response(
+            jsonEncode({
+              'restriction': termsEffective ? 'terms_blocked' : 'active',
+            }),
+            200,
+          );
+        }
+        return http.Response('{}', 404);
+      }),
+    );
+    final session = SessionController(
+      session: native,
+      tokenStore: tokens,
+      userCache: users,
+      drafts: MemoryDraftStore(),
+    );
+    await session.restore();
+    expect(session.status, SessionStatus.signedIn);
+
+    termsEffective = true;
+    final ordinary = GeneratedPostingDayClient(
+      baseUrl: 'https://api.example.test',
+      bearerToken: native.bearerToken,
+      onForbidden: session.authenticatedApiForbidden,
+      httpClient: MockClient((_) async => http.Response('{}', 403)),
+    );
+    await ordinary.current();
+    await Future<void>.delayed(Duration.zero);
+    expect(session.status, SessionStatus.legalAcceptanceRequired);
+  });
+
+  test(
     'logout racing session startup cannot restore signed-in state',
     () async {
       final tokens = MemoryTokenStore()..value = 'cached-token';
@@ -605,6 +775,9 @@ void main() {
               200,
               headers: {'set-auth-token': 'bob-token'},
             );
+          }
+          if (request.url.path.endsWith('/api/v1/account/status')) {
+            return http.Response('{"restriction":"active"}', 200);
           }
           return http.Response('{}', 404);
         }),
