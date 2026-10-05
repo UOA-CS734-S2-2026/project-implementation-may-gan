@@ -6,7 +6,7 @@ export interface ApiEnv {
   HYPERDRIVE: HyperdriveBinding;
   /** Restricted lifecycle_worker connection shared by export and Trash cleanup. Never reuse the ordinary app binding. */
   EXPORT_WORKER_HYPERDRIVE?: HyperdriveBinding;
-  /** Report-only account-purge discovery only. No scheduled handler reads this setting. */
+  /** Exact report_only schedules aggregate account-purge monitoring. All other values disable it. */
   ACCOUNT_PURGE_EXECUTION_MODE?: string;
   /** Immutable release attribution. Staging deploy tooling accepts only an exact commit SHA. */
   STAGING_RELEASE_SHA?: string;

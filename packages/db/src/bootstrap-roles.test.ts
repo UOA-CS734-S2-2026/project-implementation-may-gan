@@ -34,6 +34,7 @@ describe("Neon role bootstrap scripts", () => {
     expect(migratorBootstrap).toContain("'data_export_requests'");
     expect(migratorBootstrap).toContain("'data_export_object_cleanup_tasks'");
     expect(migratorBootstrap).toContain("'data_export_cleanup_incidents'");
+    expect(migratorBootstrap).toContain("'account_purge_operator_control'");
     expect(migratorBootstrap).not.toContain("GRANT SELECT, INSERT, UPDATE ON TABLE public.data_export_requests TO app");
     expect(migratorBootstrap).toContain("'account_notification_preferences'");
     expect(migratorBootstrap).toContain("'notification_deliveries'");
@@ -51,6 +52,7 @@ describe("Neon role bootstrap scripts", () => {
     expect(verification).toContain("lifecycle_worker_cannot_use_drizzle");
     expect(verification).toContain("roles_have_no_memberships");
     expect(verification).toContain("export_operations_private");
+    expect(verification).toContain("account_purge_operator_control");
     const executableSql = verification
       .replace(/--.*$/gm, "")
       .replace(/'(?:''|[^'])*'/g, "");

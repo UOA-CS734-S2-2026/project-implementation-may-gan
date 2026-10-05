@@ -14,9 +14,9 @@ function hasLifecycleWorkerRole(value: string): boolean {
 }
 
 /**
- * This is deliberately not called by the scheduled Worker. It permits a
- * reviewed report-only staging invocation with the restricted connection, but
- * rejects execute mode until a separate activation and runtime review.
+ * The scheduled Worker calls only this aggregate report path. Exact
+ * report_only mode and a distinct lifecycle_worker binding are required.
+ * Execute mode remains unreachable from the public and scheduled Worker.
  */
 export async function runAccountPurgeReportForEnv(env: Partial<ApiEnv>): Promise<AccountPurgeSummary | null> {
   if (resolveLifecycleExecutionMode(env.ACCOUNT_PURGE_EXECUTION_MODE) !== "report_only") return null;

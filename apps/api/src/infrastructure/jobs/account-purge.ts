@@ -5,7 +5,20 @@ import { retryDelayMs } from "./dispatch-outbox";
 
 export type AccountPurgeRuntimeMode = "disabled" | "report_only" | "execute";
 
-export interface AccountPurgeReport { due: number; failed: number; terminalFailed: number; leased: number; }
+export interface AccountPurgeReport {
+  due: number;
+  failed: number;
+  terminalFailed: number;
+  leased: number;
+  paused: boolean;
+  controlPresent: boolean;
+  controlFresh: boolean;
+  terminalCleanup: number;
+}
+export function accountPurgeControlUnavailable(report: AccountPurgeReport): boolean {
+  return !report.controlPresent || (!report.paused && !report.controlFresh);
+}
+
 export interface AccountPurgeCleanupJob {
   taskId: string;
   ownerId: string;
@@ -20,6 +33,7 @@ export interface AccountPurgeStore {
   report(): Promise<AccountPurgeReport>;
   pruneExpiredReceipts(limit: number): Promise<number>;
   claim(limit: number, leaseToken: string, leaseSeconds: number): Promise<AccountPurgeCleanupJob[]>;
+  authorize(job: Pick<AccountPurgeCleanupJob, "taskId" | "lifecycleGeneration" | "leaseToken">): Promise<boolean>;
   complete(job: Pick<AccountPurgeCleanupJob, "taskId" | "lifecycleGeneration" | "leaseToken">): Promise<boolean>;
   retry(job: Pick<AccountPurgeCleanupJob, "taskId" | "lifecycleGeneration" | "leaseToken">, delaySeconds: number): Promise<boolean>;
 }
@@ -30,8 +44,15 @@ export function createAccountPurgeStore(database: DayliDatabase): AccountPurgeSt
     async report() {
       const [row] = await database.select({
         due: sql<number>`due_count`, failed: sql<number>`failed_count`, terminalFailed: sql<number>`terminal_failed_count`, leased: sql<number>`leased_count`,
-      }).from(sql`public.report_account_purge_cleanup()`);
-      return { due: Number(row?.due ?? 0), failed: Number(row?.failed ?? 0), terminalFailed: Number(row?.terminalFailed ?? 0), leased: Number(row?.leased ?? 0) };
+        paused: sql<boolean>`paused`, controlPresent: sql<boolean>`control_present`,
+        controlFresh: sql<boolean>`control_fresh`, terminalCleanup: sql<number>`terminal_cleanup_count`,
+      }).from(sql`public.report_account_purge_cleanup()`)
+        .crossJoin(sql`public.report_account_purge_operator_control()`);
+      return {
+        due: Number(row?.due ?? 0), failed: Number(row?.failed ?? 0), terminalFailed: Number(row?.terminalFailed ?? 0), leased: Number(row?.leased ?? 0),
+        paused: row?.paused !== false, controlPresent: row?.controlPresent === true,
+        controlFresh: row?.controlFresh === true, terminalCleanup: Number(row?.terminalCleanup ?? 0),
+      };
     },
     async pruneExpiredReceipts(limit) {
       const [row] = await database.select({ deleted: sql<number>`public.delete_expired_account_purge_receipts(${limit})` })
@@ -44,6 +65,11 @@ export function createAccountPurgeStore(database: DayliDatabase): AccountPurgeSt
         objectKey: sql<string>`object_key`, exportCleanupTaskId: sql<string | null>`export_cleanup_task_id`,
         exportUploadId: sql<string | null>`export_upload_id`, leaseToken: sql<string>`lease_token`,
       }).from(sql`public.claim_account_purge_cleanup(${limit}, ${leaseToken}, ${leaseSeconds})`);
+    },
+    async authorize(job) {
+      const [row] = await database.select({ authorized: sql<boolean>`public.authorize_account_purge_cleanup(${job.taskId}, ${job.lifecycleGeneration}, ${job.leaseToken})` })
+        .from(sql`(values (1)) as purge_source`);
+      return row?.authorized === true;
     },
     async complete(job) {
       const [row] = await database.select({ completed: sql<boolean>`public.complete_account_purge_cleanup(${job.taskId}, ${job.lifecycleGeneration}, ${job.leaseToken})` })
@@ -104,6 +130,10 @@ export function createAccountPurgeDispatcher(input: {
         const providerDeadline = Math.min(startedAt + leaseSeconds * 1_000 - 5_000, endsAt - 1_000);
         try {
           if (providerDeadline - performance.now() < 1_000) throw new Error("Account purge lease budget exhausted.");
+          if (!await input.store.authorize(job)) {
+            summary.fenced += 1;
+            continue;
+          }
           if (job.exportCleanupTaskId) await removeExportArchive(input.exports, job.objectKey, job.exportUploadId, providerDeadline);
           else await deleteWithinLease(input.deleter, job.objectKey, Math.min(Math.floor(providerDeadline - performance.now()), 10_000));
           summary.objectDeletes += 1;

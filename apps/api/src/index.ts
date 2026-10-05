@@ -13,6 +13,8 @@ import { exportExecutionEnabled, readStagingExportProof, stagingExportAllUsersEn
 import { createExportRuntimeForEnv } from "./infrastructure/jobs/export-runtime";
 import { runPostTrashCleanupForEnv } from "./infrastructure/jobs/post-trash-runtime";
 import { realtimeRevocationBindingFailure, runRealtimeRevocationsForEnv } from "./infrastructure/jobs/account-realtime-revocation";
+import { runAccountPurgeReportForEnv } from "./infrastructure/jobs/account-purge-runtime";
+import { accountPurgeControlUnavailable } from "./infrastructure/jobs/account-purge";
 
 export { app };
 export { BrowserProxyEntrypoint } from "./http/browser-proxy-entrypoint";
@@ -43,8 +45,24 @@ export default {
     }
     context.waitUntil(runFutureSelfNoteDelivery(env));
     context.waitUntil(runRealtimeRevocationMaintenance(env));
+    context.waitUntil(runAccountPurgeReportMaintenance(env));
   },
 };
+
+/** Aggregate counts only. This scheduled path cannot select or delete object keys. */
+async function runAccountPurgeReportMaintenance(env: ApiEnv): Promise<void> {
+  try {
+    const summary = await runAccountPurgeReportForEnv(env);
+    if (summary?.report && accountPurgeControlUnavailable(summary.report)) {
+      console.error("account purge operator control unavailable", summary);
+    } else if (summary?.report && (summary.report.due > 0 || summary.report.failed > 0
+      || summary.report.terminalFailed > 0 || summary.report.terminalCleanup > 0)) {
+      console.info("account purge report", summary);
+    }
+  } catch {
+    console.error("account purge report failed");
+  }
+}
 
 /** Counts only. Owner and session identifiers never enter monitoring output. */
 async function runRealtimeRevocationMaintenance(env: ApiEnv): Promise<void> {
