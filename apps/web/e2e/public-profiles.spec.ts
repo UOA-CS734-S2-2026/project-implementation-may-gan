@@ -398,7 +398,9 @@ test("an anonymous visitor can browse a synthetic public profile and safely retu
   await restrictedVisitor.reload();
   await expect(restrictedVisitor.getByText("Synthetic released public dayli.")).toHaveCount(0);
   await restrictedVisitor.goBack();
-  await expect(restrictedVisitor.locator("body")).toBeVisible();
+  await expect(restrictedVisitor).toHaveURL(new RegExp(`/u/${username}$`));
+  await expect(restrictedVisitor.getByRole("heading", { name: "Public E2E" })).toBeVisible();
+  await expect(restrictedVisitor.getByText("Synthetic released public dayli.")).toHaveCount(0);
   expect(await restrictedVisitor.locator("body").innerText()).not.toContain("Synthetic released public dayli.");
   await restrictedVisitor.goForward();
   await expect(restrictedVisitor).toHaveURL(new RegExp(`/u/${username}/${postId}$`));
