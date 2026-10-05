@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PUBLIC_INTENT_MAX_AGE_MS, publicActionTarget, rememberPublicIntent, resumePublicIntent, safeAuthenticationReturnPath, signInForPublicAction } from "./public-return-intent";
+import { consumePublicIntent, PUBLIC_INTENT_MAX_AGE_MS, publicActionTarget, rememberPublicIntent, resumePublicIntent, safeAuthenticationReturnPath, signInForPublicAction } from "./public-return-intent";
 
 describe("public action return validation", () => {
   it("accepts only profile and post targets with finite actions", () => {
@@ -20,6 +20,21 @@ describe("public action return validation", () => {
   it("keeps ordinary internal authentication returns working", () => {
     expect(safeAuthenticationReturnPath("/home?tab=friends")).toBe("/home?tab=friends");
     expect(signInForPublicAction("/u/ada", "message-request")).toBe("/sign-in?next=%2Fu%2Fada%3Fintent%3Dmessage-request");
+  });
+
+  it("consumes a bound intent once and cannot recover it from history", () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
+    };
+    const target = "/u/ada/post_01K4Y6P8K2?intent=comment";
+    expect(rememberPublicIntent(target, storage, 1_000)).toBe(true);
+    expect(resumePublicIntent(target, "account-a", storage, 1_001)).toBe(true);
+    expect(consumePublicIntent(target, "account-a", storage, 1_002)).toBe(true);
+    expect(consumePublicIntent(target, "account-a", storage, 1_003)).toBe(false);
+    expect(resumePublicIntent(target, "account-a", storage, 1_004)).toBe(false);
   });
 
   it("expires intent after ten minutes and binds history to the first account", () => {

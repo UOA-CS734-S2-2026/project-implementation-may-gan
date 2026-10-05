@@ -71,14 +71,14 @@ export function rememberPublicIntent(
   return true;
 }
 
-export function resumePublicIntent(
+function trustedIntent(
   target: string,
   actorId: string,
-  storage: IntentStorage = window.sessionStorage,
-  now = Date.now(),
-): boolean {
+  storage: IntentStorage,
+  now: number,
+): { key: string; issuedAt: number; unbound: boolean } | null {
   const safeTarget = publicActionTarget(target);
-  if (!safeTarget) return false;
+  if (!safeTarget) return null;
   const key = intentStorageKey(safeTarget);
   try {
     const state = JSON.parse(storage.getItem(key) ?? "null") as Partial<StoredIntent> | null;
@@ -86,12 +86,37 @@ export function resumePublicIntent(
     const age = typeof issuedAt === "number" ? now - issuedAt : Number.POSITIVE_INFINITY;
     if (!state || typeof issuedAt !== "number" || age < 0 || age > PUBLIC_INTENT_MAX_AGE_MS || (state.actorId !== null && state.actorId !== actorId)) {
       storage.removeItem(key);
-      return false;
+      return null;
     }
-    storage.setItem(key, JSON.stringify({ issuedAt, actorId } satisfies StoredIntent));
-    return true;
+    return { key, issuedAt, unbound: state.actorId === null };
   } catch {
     storage.removeItem(key);
-    return false;
+    return null;
   }
+}
+
+/** Binds a valid anonymous handoff to its first authenticated actor without consuming it. */
+export function resumePublicIntent(
+  target: string,
+  actorId: string,
+  storage: IntentStorage = window.sessionStorage,
+  now = Date.now(),
+): boolean {
+  const trusted = trustedIntent(target, actorId, storage, now);
+  if (!trusted) return false;
+  if (trusted.unbound) storage.setItem(trusted.key, JSON.stringify({ issuedAt: trusted.issuedAt, actorId } satisfies StoredIntent));
+  return true;
+}
+
+/** Consumes a trusted, actor-bound handoff exactly once after authorization is refetched. */
+export function consumePublicIntent(
+  target: string,
+  actorId: string,
+  storage: IntentStorage = window.sessionStorage,
+  now = Date.now(),
+): boolean {
+  const trusted = trustedIntent(target, actorId, storage, now);
+  if (!trusted || trusted.unbound) return false;
+  storage.removeItem(trusted.key);
+  return true;
 }

@@ -126,6 +126,7 @@ void main() {
       await tester.tap(
         find.descendant(of: publicCard, matching: find.text('Restore')),
       );
+      await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle(const Duration(milliseconds: 100));
       expect(
         await services.posts.get(_publicPostId),
