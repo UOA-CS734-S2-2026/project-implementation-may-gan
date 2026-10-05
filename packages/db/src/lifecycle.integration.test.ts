@@ -500,6 +500,70 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     expect(present?.present).toBe(false);
   });
 
+  it("durably leases, fences, and supersedes realtime revocation generations", async () => {
+    const userId = await createUser("realtime-revocation");
+    const requestId = `realtime-request-${crypto.randomUUID()}`;
+    const lease = `realtime-lease-${crypto.randomUUID()}`;
+    const requestedAt = new Date();
+    await app`insert into public.account_lifecycles
+      (user_id, state, request_id, idempotency_key_digest, generation, requested_at, cancel_until, purge_due_at)
+      values (${userId}, 'pending_deletion', ${requestId}, ${"d".repeat(64)}, 1,
+        ${requestedAt}, ${new Date(requestedAt.getTime() + 168 * 60 * 60_000)},
+        ${new Date(requestedAt.getTime() + 336 * 60 * 60_000)})`;
+    expect(await app`select public.enqueue_account_realtime_revocation(${userId}, 1) as accepted`)
+      .toEqual([{ accepted: true }]);
+    expect(await app`select public.enqueue_account_realtime_revocation(${userId}, 1) as accepted`)
+      .toEqual([{ accepted: true }]);
+    await expect(app`select * from public.account_realtime_revocations`).rejects.toMatchObject({ code: "42501" });
+    const claimed = await lifecycleWorker`select * from public.claim_account_realtime_revocations(1, ${lease}, 60)`;
+    expect(claimed).toEqual([{ owner_id: userId, lifecycle_generation: "1", attempt_count: "1", lease_token: lease }]);
+    expect(await lifecycleWorker`select public.complete_account_realtime_revocation(${userId}, 1, 'wrong') as accepted`)
+      .toEqual([{ accepted: false }]);
+
+    await app`update public.account_lifecycles set state = 'active', request_id = null,
+      idempotency_key_digest = null, generation = 2, requested_at = null, cancel_until = null,
+      purge_due_at = null, updated_at = clock_timestamp() where user_id = ${userId}`;
+    expect(await lifecycleWorker`select public.complete_account_realtime_revocation(${userId}, 1, ${lease}) as accepted`)
+      .toEqual([{ accepted: true }]);
+    const status = await migrator`select status, retention_expires_at = completed_at + interval '720 hours' as retained
+      from public.account_realtime_revocations where user_id = ${userId} and lifecycle_generation = 1`;
+    expect(status).toEqual([{ status: "superseded", retained: true }]);
+    const report = await lifecycleWorker`select * from public.report_account_realtime_revocations()`;
+    expect(Number(report[0]?.superseded_count)).toBeGreaterThanOrEqual(1);
+
+    await migrator`update public.account_realtime_revocations set completed_at = expiry.completed,
+      retention_expires_at = expiry.completed + interval '720 hours'
+      from (select clock_timestamp() - interval '721 hours' as completed) expiry
+      where user_id = ${userId} and lifecycle_generation = 1`;
+    expect(await lifecycleWorker`select public.prune_account_realtime_revocations(1) as deleted`).toEqual([{ deleted: 1 }]);
+    const [remaining] = await migrator`select exists(select 1 from public.account_realtime_revocations
+      where user_id = ${userId} and lifecycle_generation = 1) as present`;
+    expect(remaining?.present).toBe(false);
+  });
+
+  it("bounds cancelled-row reconciliation independently of returned claims", async () => {
+    const owners: string[] = [];
+    for (let index = 0; index < 5; index += 1) {
+      const userId = await createUser(`realtime-cancelled-${index}`);
+      owners.push(userId);
+      const requestedAt = new Date(Date.now() + index);
+      await app`insert into public.account_lifecycles
+        (user_id, state, request_id, idempotency_key_digest, generation, requested_at, cancel_until, purge_due_at)
+        values (${userId}, 'pending_deletion', ${crypto.randomUUID()}, ${"e".repeat(64)}, 1,
+          ${requestedAt}, ${new Date(requestedAt.getTime() + 168 * 60 * 60_000)},
+          ${new Date(requestedAt.getTime() + 336 * 60 * 60_000)})`;
+      await app`select public.enqueue_account_realtime_revocation(${userId}, 1)`;
+      await app`update public.account_lifecycles set state = 'active', request_id = null,
+        idempotency_key_digest = null, generation = 2, requested_at = null, cancel_until = null,
+        purge_due_at = null, updated_at = clock_timestamp() where user_id = ${userId}`;
+    }
+    expect(await lifecycleWorker`select * from public.claim_account_realtime_revocations(1, ${crypto.randomUUID()}, 60)`).toEqual([]);
+    const [counts] = await migrator`select count(*) filter (where status = 'superseded')::integer as superseded,
+      count(*) filter (where status = 'pending')::integer as pending
+      from public.account_realtime_revocations where user_id = any(${owners})`;
+    expect(counts).toEqual({ superseded: 4, pending: 1 });
+  });
+
   it("denies app and lifecycle_worker direct physical purge access", async () => {
     const userId = await createUser("privileges");
 

@@ -1,0 +1,6 @@
+reason: All three indexes are built on the new empty revocation table before any writer can access it, so concurrent creation adds no availability benefit and would break atomic installation.
+affected_data_and_clients: Creates due-time, lease-time, and retention indexes with no existing rows or active clients.
+rollout_sequence: Apply atomically through the protected migration workflow before deploying the writer or scheduled dispatcher.
+backup_checkpoint: Confirm the PostgreSQL restore checkpoint before protected-environment execution.
+forward_fix_plan: Stop on failure and install corrected indexes in a reviewed forward migration.
+reviewer: Required database CODEOWNER review before protected migration execution.

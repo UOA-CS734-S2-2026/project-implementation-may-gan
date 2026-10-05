@@ -154,6 +154,7 @@ export const exportDataInventory: Readonly<Record<string, ExportTableDecision>> 
   account_lifecycles: excluded("user_id,state,request_id,idempotency_key_digest,generation,requested_at,cancel_until,purge_due_at,purge_started_at,last_error_category,next_attempt_at,lease_token,lease_expires_at,created_at,updated_at", "user_id", "private_lifecycle_control_state"),
   account_management_grants: excluded("token_digest,user_id,session_id,action,lifecycle_generation,credential_hash_digest,google_subject_digest,expires_at,consumed_at,created_at", "user_id", "action_bound_credentials"),
   account_purge_object_cleanup_tasks: excluded("id,user_id,object_key,export_cleanup_task_id,status,attempt_count,next_attempt_at,lease_token,lease_expires_at,failure_category,created_at,updated_at,completed_at", "user_id", "private_cleanup_metadata"),
+  account_realtime_revocations: excluded("user_id,lifecycle_generation,status,attempt_count,next_attempt_at,lease_token,lease_expires_at,failure_category,created_at,completed_at,retention_expires_at,updated_at", "user_id", "private_lifecycle_control_state"),
   account_notification_preferences: owned({
     owner: "user_id", retention: "account_lifetime", deletion: "purge_with_account", access: "owner_preference_procedure",
     retainedForOthers: "not_applicable", trashRestore: "not_applicable",

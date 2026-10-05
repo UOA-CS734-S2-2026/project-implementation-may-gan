@@ -12,6 +12,7 @@ import { exportExecutionEnabled, readStagingExportProof, stagingExportAllUsersEn
   stagingExportCleanupOnlyEnabled } from "./features/data-export/shared/export-activation";
 import { createExportRuntimeForEnv } from "./infrastructure/jobs/export-runtime";
 import { runPostTrashCleanupForEnv } from "./infrastructure/jobs/post-trash-runtime";
+import { runRealtimeRevocationsForEnv } from "./infrastructure/jobs/account-realtime-revocation";
 
 export { app };
 export { BrowserProxyEntrypoint } from "./http/browser-proxy-entrypoint";
@@ -41,8 +42,20 @@ export default {
       context.waitUntil(runExportMaintenance(env, proof ?? undefined, allStagingExports));
     }
     context.waitUntil(runFutureSelfNoteDelivery(env));
+    context.waitUntil(runRealtimeRevocationMaintenance(env));
   },
 };
+
+/** Counts only. Owner and session identifiers never enter monitoring output. */
+async function runRealtimeRevocationMaintenance(env: ApiEnv): Promise<void> {
+  try {
+    const summary = await runRealtimeRevocationsForEnv(env);
+    if (!summary) console.error("account realtime revocation bindings unavailable");
+    else if (summary.claimed > 0 || summary.report.due > 0 || summary.report.failed > 0) console.info("account realtime revocation", summary);
+  } catch {
+    console.error("account realtime revocation failed");
+  }
+}
 
 async function runNotificationMaintenance(env: ApiEnv): Promise<void> {
   if (notificationPublishersEnabled(env)) {

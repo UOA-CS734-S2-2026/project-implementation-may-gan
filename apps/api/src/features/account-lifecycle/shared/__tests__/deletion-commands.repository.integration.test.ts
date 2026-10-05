@@ -86,6 +86,10 @@ function localUrl(value: string | undefined) {
     expect(await migrator.db.select().from(schema.session).where(eq(schema.session.userId, userId))).toEqual([]);
     expect(await migrator.db.select().from(schema.socketTickets).where(eq(schema.socketTickets.userId, userId))).toEqual([]);
     expect(await migrator.db.select().from(schema.pushDevices).where(eq(schema.pushDevices.userId, userId))).toEqual([]);
+    expect(await migrator.db.select().from(schema.accountRealtimeRevocations)
+      .where(eq(schema.accountRealtimeRevocations.userId, userId))).toMatchObject([{
+        lifecycleGeneration: 1, status: "pending", attemptCount: 0,
+      }]);
     expect(await requestAccountDeletion(app.db, { userId, sessionId, grantToken: proofToken, idempotencyKey }))
       .toEqual({ status: "invalid_grant" });
   });

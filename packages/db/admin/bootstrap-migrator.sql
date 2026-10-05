@@ -35,6 +35,7 @@ BEGIN
     'account_purge_object_cleanup_tasks',
     'account_notification_preferences',
     'account_purge_receipts',
+    'account_realtime_revocations',
     'age_declarations',
     'data_export_requests',
     'data_export_object_cleanup_tasks',

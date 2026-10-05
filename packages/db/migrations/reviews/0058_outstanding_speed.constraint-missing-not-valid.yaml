@@ -1,0 +1,6 @@
+reason: The foreign key is added to a newly created empty table in the same migration, so validation scans no rows and cannot block existing table writes for a material duration.
+affected_data_and_clients: Adds referential integrity for future content-free revocation records. Existing user rows are read only for catalog validation.
+rollout_sequence: Apply through the protected migration workflow under the explicit lock and statement timeouts.
+backup_checkpoint: Confirm the PostgreSQL restore checkpoint before protected-environment execution.
+forward_fix_plan: Stop on timeout and use a reviewed forward migration with NOT VALID and later validation if needed.
+reviewer: Required database CODEOWNER review before protected migration execution.

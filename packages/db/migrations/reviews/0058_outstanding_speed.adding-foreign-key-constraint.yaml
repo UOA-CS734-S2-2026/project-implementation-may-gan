@@ -1,0 +1,6 @@
+reason: The foreign key is installed on a new empty table, so the SHARE ROW EXCLUSIVE lock is bounded to catalog work under a five-second lock timeout.
+affected_data_and_clients: References the existing user primary key without scanning revocation rows or changing user data.
+rollout_sequence: Apply through the protected migration workflow during normal migration maintenance and observe the timeout guard.
+backup_checkpoint: Confirm the PostgreSQL restore checkpoint before protected-environment execution.
+forward_fix_plan: Stop on lock timeout and retry in a reviewed maintenance window, without bypassing the ownership constraint.
+reviewer: Required database CODEOWNER review before protected migration execution.

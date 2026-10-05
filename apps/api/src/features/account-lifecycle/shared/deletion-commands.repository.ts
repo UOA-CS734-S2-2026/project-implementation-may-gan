@@ -87,6 +87,10 @@ export async function requestAccountDeletion(database: DayliDatabase, input: {
     }
     const sessions = await db.select({ id: schema.session.id }).from(schema.session)
       .where(eq(schema.session.userId, input.userId));
+    const [queued] = await db.select({ accepted: sql<boolean>`public.enqueue_account_realtime_revocation(
+      ${input.userId}, ${pending.generation}
+    )` }).from(sql`(values (1)) as realtime_revocation`);
+    if (!queued?.accepted) throw new Error("The realtime revocation was not committed.");
     await db.delete(schema.socketTickets).where(eq(schema.socketTickets.userId, input.userId));
     await db.delete(schema.pushDevices).where(eq(schema.pushDevices.userId, input.userId));
     await db.delete(schema.messagingOutbox).where(eq(schema.messagingOutbox.recipientId, input.userId));
