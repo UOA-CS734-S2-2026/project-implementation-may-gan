@@ -94,6 +94,9 @@ export function createStagingWorkerConfigs({
        typeof mediaVars.R2_BUCKET_NAME !== "string" || !mediaVars.R2_BUCKET_NAME)) {
     throw new Error("Staging export execution and cleanup require complete R2 bindings.");
   }
+  if (typeof releaseSha !== "string" || !/^[a-f0-9]{40}$/.test(releaseSha)) {
+    throw new Error("Refusing invalid staging release attribution.");
+  }
   const hasAttestationStorage = mediaVars.R2_ACCOUNT_ID !== undefined || mediaVars.R2_BUCKET_NAME !== undefined;
   const attestationVars = hasAttestationStorage
     ? createStagingAttestationExpectations({ releaseSha, mediaVars })

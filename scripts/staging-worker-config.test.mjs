@@ -180,5 +180,7 @@ test("rejects an unreviewed Worker target or Hyperdrive ID", () => {
   assert.throws(() => createStagingWorkerConfigs({ ...input, workerName: "production-api" }));
   assert.throws(() => createStagingWorkerConfigs({ ...input, hyperdriveId: "not-an-id" }));
   assert.throws(() => createStagingWorkerConfigs({ ...input, releaseSha: "main" }));
+  assert.throws(() => createStagingWorkerConfigs({ ...input, releaseSha: "main", mediaVars: {} }),
+    /invalid staging release attribution/);
   assert.equal(createStagingWorkerConfigs({ ...input, mediaVars: {} }).probe.vars, undefined);
 });
