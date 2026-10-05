@@ -242,6 +242,7 @@ describe("generic notification dispatcher", () => {
     try {
       const storage = store();
       let providerSignal: AbortSignal | undefined;
+      const diagnostics = vi.fn();
       const sender = {
         send: vi.fn((_payload: unknown, options?: { signal: AbortSignal }) => {
           providerSignal = options?.signal;
@@ -255,12 +256,14 @@ describe("generic notification dispatcher", () => {
         now: () => now,
         immediateBudgetMs: 1_500,
         deliveryTimeoutMs: 20_000,
+        onDiagnostic: diagnostics,
       });
 
       const pending = dispatcher.dispatchImmediately();
       await vi.advanceTimersByTimeAsync(1_500);
       await expect(pending).resolves.toMatchObject({ claimed: 1, rescheduled: 1 });
       expect(providerSignal?.aborted).toBe(true);
+      expect(diagnostics.mock.calls).toEqual([[{ stage: "send", outcome: "timed_out" }]]);
       expect(storage.reschedule).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
         failureCategory: "transient", terminal: false,
       }));

@@ -7,6 +7,7 @@ import { createHyperdriveNotificationStore } from "./notification-store";
 
 export interface NotificationDeliveryBindings {
   HYPERDRIVE: HyperdriveBinding;
+  API_RATE_LIMIT_SCOPE?: string;
   NOTIFICATION_DELIVERY_ENABLED?: string;
   FCM_SERVICE_ACCOUNT_JSON?: string;
   PUSH_TOKEN_ENCRYPTION_KEY?: string;
@@ -22,17 +23,36 @@ const disabledDispatcher: NotificationDispatcher = {
 export async function createNotificationDeliveryDispatcher(
   env: NotificationDeliveryBindings,
 ): Promise<NotificationDispatcher> {
-  if (env.NOTIFICATION_DELIVERY_ENABLED !== "true" || !env.FCM_SERVICE_ACCOUNT_JSON) return disabledDispatcher;
+  const diagnostics = env.API_RATE_LIMIT_SCOPE === "staging";
+  const configurationFailure = (reason: "credentials_missing" | "credentials_invalid" | "token_protection_unavailable") => {
+    if (diagnostics) console.info("notification delivery diagnostics", { stage: "configuration", outcome: reason });
+    return disabledDispatcher;
+  };
+  if (env.NOTIFICATION_DELIVERY_ENABLED !== "true") return disabledDispatcher;
+  if (!env.FCM_SERVICE_ACCOUNT_JSON) return configurationFailure("credentials_missing");
   const protector = await createWorkerPushTokenProtector(env.PUSH_TOKEN_ENCRYPTION_KEY);
-  if (!protector) return disabledDispatcher;
+  if (!protector) return configurationFailure("token_protection_unavailable");
   let account;
   try { account = normalizeFcmServiceAccount(JSON.parse(env.FCM_SERVICE_ACCOUNT_JSON)); }
-  catch { return disabledDispatcher; }
-  if (!account) return disabledDispatcher;
-  const fcm = createFcmHttpV1Sender({ serviceAccount: account });
-  return createNotificationDispatcher({
+  catch { return configurationFailure("credentials_invalid"); }
+  if (!account) return configurationFailure("credentials_invalid");
+  const fcm = createFcmHttpV1Sender({
+    serviceAccount: account,
+    onDiagnostic: diagnostics ? (value) => console.info("notification delivery diagnostics", value) : undefined,
+  });
+  const dispatcher = createNotificationDispatcher({
     store: createHyperdriveNotificationStore(env.HYPERDRIVE),
     resolver: createHyperdriveNotificationResolver(env.HYPERDRIVE, protector),
     sender: { send: (notification, options) => fcm.sendGeneric(notification, options) },
+    onDiagnostic: diagnostics ? (value) => console.info("notification delivery diagnostics", value) : undefined,
   });
+  const report = async (mode: "immediate" | "scheduled") => {
+    const summary = await (mode === "immediate" ? dispatcher.dispatchImmediately() : dispatcher.dispatchScheduled());
+    if (diagnostics && summary.claimed > 0) console.info("notification delivery summary", { mode, ...summary });
+    return summary;
+  };
+  return {
+    dispatchImmediately: () => report("immediate"),
+    dispatchScheduled: () => report("scheduled"),
+  };
 }
