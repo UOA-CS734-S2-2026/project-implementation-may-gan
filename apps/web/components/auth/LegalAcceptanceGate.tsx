@@ -1,22 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { readAccountPolicy } from "@/lib/legal/acceptance";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { LegalAcceptanceError, readAccountPolicy } from "@/lib/legal/acceptance";
 import { useSession } from "@/lib/session/hooks";
 
 /** Stops the ordinary app before any blocked-account data request is made. */
 export function LegalAcceptanceGate({ children }: { children: React.ReactNode }) {
-  const { user, isPending } = useSession();
+  const { user, isPending, refresh } = useSession();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const [checkedUserId, setCheckedUserId] = useState<string>();
+  const search = searchParams.toString();
+  const returnTo = `${pathname}${search ? `?${search}` : ""}`;
+  const [checked, setChecked] = useState<{ userId: string; route: string }>();
 
   useEffect(() => {
     let active = true;
     if (isPending) return;
     if (!user) {
-      router.replace(`/sign-in?next=${encodeURIComponent(pathname)}`);
+      router.replace(`/sign-in?next=${encodeURIComponent(returnTo)}`);
       return;
     }
     void readAccountPolicy().then((policy) => {
@@ -25,12 +28,18 @@ export function LegalAcceptanceGate({ children }: { children: React.ReactNode })
         router.replace("/legal/acceptance");
         return;
       }
-      setCheckedUserId(user.id);
-    }).catch(() => {
-      if (active) router.replace("/legal/acceptance?status=unavailable");
+      setChecked({ userId: user.id, route: returnTo });
+    }).catch(async (reason: unknown) => {
+      if (!active) return;
+      if (reason instanceof LegalAcceptanceError && reason.status === 401) {
+        await refresh().catch(() => {});
+        if (active) router.replace(`/sign-in?next=${encodeURIComponent(returnTo)}`);
+      } else {
+        router.replace("/legal/acceptance?status=unavailable");
+      }
     });
     return () => { active = false; };
-  }, [isPending, pathname, router, user]);
+  }, [isPending, refresh, returnTo, router, user]);
 
-  return user && checkedUserId === user.id ? children : null;
+  return user && checked?.userId === user.id && checked.route === returnTo ? children : null;
 }
