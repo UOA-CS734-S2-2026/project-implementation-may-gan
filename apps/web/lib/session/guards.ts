@@ -84,10 +84,9 @@ export async function resolveLanding(
     const decision = sessionGuard(session, "/", hasSessionRefreshAttempt(headers));
     return decision.state === "redirect" ? decision : { state: "render" };
   }
-  const readiness = await readUsernameReadiness(headers, transport);
-  if (readiness === "ready") return { state: "redirect", location: "/home" };
-  if (readiness === "needs-username") return { state: "redirect", location: "/setup-username" };
-  return { state: "render" };
+  // The main layout checks legal acceptance before username readiness.
+  // Reading the ordinary profile here would reject legally blocked accounts.
+  return { state: "redirect", location: "/home" };
 }
 
 export { refreshAttemptCookie, safeReturnPath };

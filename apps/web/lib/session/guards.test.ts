@@ -44,16 +44,13 @@ describe("server session guards", () => {
     }
   });
 
-  it("redirects an authenticated landing visitor by username readiness", async () => {
-    const ready = vi.fn()
+  it("routes authenticated landing visitors through the main legal and username gates without reading a blocked profile", async () => {
+    const fetch = vi.fn()
       .mockResolvedValueOnce(Response.json({ user: { id: "user_1" }, session: { id: "session_1" } }))
-      .mockResolvedValueOnce(Response.json({ needsUsernameSetup: false }));
-    await expect(resolveLanding(headers, { fetch: ready })).resolves.toEqual({ state: "redirect", location: "/home" });
-
-    const setup = vi.fn()
-      .mockResolvedValueOnce(Response.json({ user: { id: "user_1" }, session: { id: "session_1" } }))
-      .mockResolvedValueOnce(Response.json({ needsUsernameSetup: true }));
-    await expect(resolveLanding(headers, { fetch: setup })).resolves.toEqual({ state: "redirect", location: "/setup-username" });
+      .mockResolvedValueOnce(Response.json({ error: { code: "FORBIDDEN", details: { restriction: "terms_blocked" } } }, { status: 403 }));
+    await expect(resolveLanding(headers, { fetch })).resolves.toEqual({ state: "redirect", location: "/home" });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(new URL(fetch.mock.calls[0][0].url).pathname).toBe("/api/auth/get-session");
   });
 
   it("returns an expired landing cookie deletion to the public landing, while protected guards redirect", async () => {
