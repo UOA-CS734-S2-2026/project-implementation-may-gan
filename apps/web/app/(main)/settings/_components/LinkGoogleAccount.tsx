@@ -1,14 +1,36 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { apiBaseUrl } from "@/lib/api/config";
+
+type LinkedAccount = { providerId?: unknown };
 
 /** Starts an explicit, password-confirmed Google account link. */
 export function LinkGoogleAccount() {
   const [password, setPassword] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleLinked, setIsGoogleLinked] = useState<boolean>();
   const [error, setError] = useState<string>();
+
+  useEffect(() => {
+    let active = true;
+
+    void fetch(`${apiBaseUrl}/api/auth/list-accounts`, { credentials: "include" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("accounts-unavailable");
+        const accounts: unknown = await response.json();
+        if (!Array.isArray(accounts)) throw new Error("accounts-unavailable");
+        if (active) setIsGoogleLinked(accounts.some((account: LinkedAccount) => account?.providerId === "google"));
+      })
+      .catch(() => {
+        if (active) setError("We could not load your sign-in methods.");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -37,6 +59,14 @@ export function LinkGoogleAccount() {
       setError("We could not link Google. Check your current password and use the Google account with this email.");
       setIsSubmitting(false);
     }
+  }
+
+  if (isGoogleLinked === undefined) {
+    return error ? <p role="alert" className="text-xs text-red-600">{error}</p> : <p className="text-sm text-foreground/60">Checking Google connection...</p>;
+  }
+
+  if (isGoogleLinked) {
+    return <p className="rounded-lg border border-foreground/10 px-4 py-3 text-sm font-medium">Google connected</p>;
   }
 
   if (!isOpen) {
