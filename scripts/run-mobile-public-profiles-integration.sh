@@ -373,6 +373,11 @@ run_public_case() {
 }
 run_public_case 'password sign-in returns to like intent and writes only after confirmation'
 run_public_case 'password sign-in returns to friend intent without sending until tapped'
+native_messages_before="$(docker compose -p "$compose_project" -f "$compose_file" exec -T postgres psql -At -U postgres -d dayli_test -c "select count(*) from messages m join conversations c on c.id = m.conversation_id where m.sender_id = '$second_viewer_user_id' and m.body = 'Explicit native message.' and c.user_low_id = least('$public_user_id', '$second_viewer_user_id') and c.user_high_id = greatest('$public_user_id', '$second_viewer_user_id')")"
+if [[ "$native_messages_before" != "0" ]]; then
+  echo "Expected zero native messages before explicit send, found ${native_messages_before}." >&2
+  exit 1
+fi
 run_public_case 'password sign-in returns to message intent and sends exactly once'
 run_public_case 'password sign-in returns to comment intent and posts only after send'
 run_public_case 'consumes the externally recorded native return URL after real sign-in'
@@ -396,7 +401,8 @@ assert_count() {
 assert_count 'native like' "select count(*) from post_likes pl join public.\"user\" u on u.id = pl.user_id where pl.post_id = '$public_post_id' and u.username = '$viewer_username'"
 assert_count 'native comment' "select count(*) from post_comments pc join public.\"user\" u on u.id = pc.author_id where pc.post_id = '$public_post_id' and u.username = '$viewer_username' and pc.deleted_at is null"
 assert_count 'native friend request' "select count(*) from friend_requests fr join public.\"user\" sender on sender.id = fr.sender_id join public.\"user\" recipient on recipient.id = fr.recipient_id where sender.username = '$second_viewer_username' and recipient.username = '$public_username'"
-assert_count 'native direct conversation' "select count(*) from conversations c join public.\"user\" low on low.id = c.user_low_id join public.\"user\" high on high.id = c.user_high_id where '$second_viewer_username' in (low.username, high.username) and '$public_username' in (low.username, high.username)"
+assert_count 'native sent message' "select count(*) from messages m join conversations c on c.id = m.conversation_id where m.sender_id = '$second_viewer_user_id' and m.body = 'Explicit native message.' and c.user_low_id = least('$public_user_id', '$second_viewer_user_id') and c.user_high_id = greatest('$public_user_id', '$second_viewer_user_id')"
+assert_count 'native sent message client ID' "select count(distinct m.client_message_id) from messages m join conversations c on c.id = m.conversation_id where m.sender_id = '$second_viewer_user_id' and m.body = 'Explicit native message.' and c.user_low_id = least('$public_user_id', '$second_viewer_user_id') and c.user_high_id = greatest('$public_user_id', '$second_viewer_user_id')"
 
 echo 'Cold restarting the Android app for the real Trash journey'
 flutter test integration_test/trash_restore_real_test.dart \

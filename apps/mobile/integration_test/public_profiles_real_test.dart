@@ -329,7 +329,18 @@ void main() {
       expect(services.messaging.failure, isNull);
       final after = await services.messaging.findDirect(recipientId);
       expect(after, isA<ApiSuccess<String?>>());
-      expect((after as ApiSuccess<String?>).value, isNotNull);
+      final conversationId = (after as ApiSuccess<String?>).value;
+      expect(conversationId, isNotNull);
+      await services.messaging.loadConversation(conversationId!);
+      final sent = services.messaging
+          .thread(conversationId)
+          .where(
+            (message) =>
+                message.senderId == services.session.user!.id &&
+                message.text == 'Explicit native message.',
+          );
+      expect(sent, hasLength(1));
+      expect(sent.single.clientMessageId, isNotEmpty);
     },
     skip: !_fixtureReady,
   );
@@ -492,6 +503,17 @@ void main() {
       final mediaUrl = Uri.parse(
         '$_apiBaseUrl/api/v1/posts/$_publicPostId/media/$mediaId/content',
       );
+      await tester.pumpWidget(
+        DayliApp(
+          services: viewer.services,
+          useGoogleFonts: false,
+          initialLocation: '/posts/$_publicPostId',
+        ),
+      );
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      expect(find.text('Synthetic released dayli.'), findsOneWidget);
+      expect(find.byKey(const Key('post.photo.0')), findsOneWidget);
+      expect(find.byKey(const Key('post.commentCount')), findsOneWidget);
 
       final blockClient = HttpClient();
       addTearDown(() => blockClient.close(force: true));
@@ -526,6 +548,16 @@ void main() {
         await viewer.services.interactions.likes(_publicPostId),
         isA<ApiError<PostPage<PostLike>>>(),
       );
+      tester.element(find.byType(Scaffold).first).go('/u/$_publicUsername');
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      expect(find.text('Synthetic released dayli.'), findsNothing);
+      expect(find.byKey(const Key('post.photo.0')), findsNothing);
+      tester.element(find.byType(Scaffold).first).go('/posts/$_publicPostId');
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      expect(find.byKey(const Key('post.unavailable')), findsOneWidget);
+      expect(find.text('Synthetic released dayli.'), findsNothing);
+      expect(find.byKey(const Key('post.photo.0')), findsNothing);
+      expect(find.byKey(const Key('post.commentCount')), findsNothing);
       final mediaRequest = await blockClient.getUrl(mediaUrl);
       mediaRequest.headers.set(
         HttpHeaders.authorizationHeader,
