@@ -16,9 +16,10 @@ let actorId: string | null = "actor";
 vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: actorId ? { id: actorId } : null, isPending: false }) }));
 const replace = vi.fn();
 let query = "";
+let pathname = "/u/ada";
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace, push: vi.fn() }),
-  usePathname: () => "/u/ada",
+  usePathname: () => pathname,
   useSearchParams: () => new URLSearchParams(query),
 }));
 const emptyPeriod = { from: "2026-09-01", to: "2026-09-30", trackedDays: 30, postedDays: 0, missingDays: 29, average: null, lowest: null, highest: null };
@@ -45,6 +46,7 @@ describe("public profile", () => {
     vi.clearAllMocks();
     actorId = "actor";
     query = "";
+    pathname = "/u/ada";
     window.sessionStorage.clear();
     profiles.profilesApi.details.mockResolvedValue(authorized());
     api.loadSocialProfile.mockResolvedValue({ ok: true, value: { id: "ada", username: "ada", displayName: "Ada", relationship: "friends" } });
@@ -137,6 +139,32 @@ describe("public profile", () => {
 
     expect(await screen.findByText(/Review this profile/)).toBeTruthy();
     await waitFor(() => expect(profiles.profilesApi.details.mock.calls.length).toBeGreaterThanOrEqual(2));
+    expect(api.sendFriendRequest).not.toHaveBeenCalled();
+  });
+
+  it("does not carry a consumed notice to another profile or actor", async () => {
+    query = "intent=friend-request";
+    rememberPublicIntent("/u/ada?intent=friend-request");
+    api.loadSocialProfile.mockResolvedValue({ ok: true, value: { id: "ada", username: "ada", displayName: "Ada", relationship: "none" } });
+    const { rerender, client } = renderProfile();
+    const show = (username: string) => rerender(<QueryClientProvider client={client}><Profile username={username} /></QueryClientProvider>);
+
+    expect(await screen.findByText(/Review this profile/)).toBeTruthy();
+    query = "";
+    pathname = "/u/bea";
+    profiles.profilesApi.details.mockResolvedValue(authorized({ id: "bea", username: "bea", displayName: "Bea" }));
+    api.loadSocialProfile.mockResolvedValue({ ok: true, value: { id: "bea", username: "bea", displayName: "Bea", relationship: "none" } });
+    show("bea");
+    expect(screen.queryByText(/Review this profile/)).toBeNull();
+
+    query = "intent=friend-request";
+    rememberPublicIntent("/u/bea?intent=friend-request");
+    show("bea");
+    expect(await screen.findByText(/Review this profile/)).toBeTruthy();
+    actorId = "replacement-actor";
+    query = "";
+    show("bea");
+    expect(screen.queryByText(/Review this profile/)).toBeNull();
     expect(api.sendFriendRequest).not.toHaveBeenCalled();
   });
 

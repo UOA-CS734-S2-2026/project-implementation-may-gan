@@ -38,7 +38,17 @@ export function Profile({ username: requested }: { username: string }) {
   const moved = Boolean(handle && handle.toLowerCase() !== requested.toLowerCase());
   const rawIntent = searchParams.get("intent");
   const candidateIntent = isPublicAction(rawIntent) && (rawIntent === "friend-request" || rawIntent === "message-request") ? rawIntent : null;
-  const [intent, setIntent] = useState<"friend-request" | "message-request" | null>(null);
+  const [presentation, setPresentation] = useState<{
+    action: "friend-request" | "message-request";
+    actorId: string;
+    pathname: string;
+    username: string;
+  } | null>(null);
+  const intent = presentation?.actorId === user?.id
+    && presentation?.pathname === pathname
+    && presentation?.username.toLowerCase() === requested.toLowerCase()
+    ? presentation.action
+    : null;
   const presentedTarget = useRef<string | null>(null);
   useEffect(() => {
     if (!rawIntent) {
@@ -47,7 +57,7 @@ export function Profile({ username: requested }: { username: string }) {
     }
     if (sessionPending) return;
     if (!candidateIntent || !user) {
-      queueMicrotask(() => setIntent(null));
+      queueMicrotask(() => setPresentation(null));
       router.replace(pathname);
       return;
     }
@@ -58,7 +68,7 @@ export function Profile({ username: requested }: { username: string }) {
     }
     if (!details.isSuccess || !resumePublicIntent(target, user.id)) {
       if (details.isSuccess) {
-        queueMicrotask(() => setIntent(null));
+        queueMicrotask(() => setPresentation(null));
         router.replace(pathname);
       }
       return;
@@ -68,9 +78,9 @@ export function Profile({ username: requested }: { username: string }) {
       if (!current) return;
       if (result.status === "success" && consumePublicIntent(target, user.id)) {
         presentedTarget.current = target;
-        setIntent(candidateIntent);
+        setPresentation({ action: candidateIntent, actorId: user.id, pathname, username: requested });
       } else {
-        setIntent(null);
+        setPresentation(null);
       }
       router.replace(pathname);
     });

@@ -355,11 +355,23 @@ test("an anonymous visitor can browse a synthetic public profile and safely retu
   await restrictedVisitor.goto(`/u/${username}/${postId}`);
   await expect(restrictedVisitor.getByText("Synthetic released public dayli.")).toBeVisible();
   expect((await restrictedVisitor.request.get(publicPost.media[0]!.url)).status()).toBe(200);
+  const archiveBeforeTrash = await restrictedVisitor.request.get(`${apiOrigin}/api/v1/profiles/${username}/posts`);
+  expect(JSON.stringify(await archiveBeforeTrash.json())).toContain(postId);
   const trashed = await page.evaluate(async ({ api, id }) => fetch(`${api}/api/v1/posts/${id}/trash`, { method: "POST", credentials: "include" }).then((response) => response.status), { api: apiOrigin, id: postId });
   expect(trashed).toBe(200);
   for (const url of [`${apiOrigin}/api/v1/posts/${postId}`, publicPost.media[0]!.url]) {
     expect((await restrictedVisitor.request.get(url)).status()).toBe(404);
   }
+  for (const route of [
+    `/api/v1/posts/${postId}/revisions`,
+    `/api/v1/posts/${postId}/likes`,
+    `/api/v1/posts/${postId}/comments`,
+  ]) expect((await page.request.get(`${apiOrigin}${route}`)).status()).toBe(404);
+  const archiveAfterTrash = await restrictedVisitor.request.get(`${apiOrigin}/api/v1/profiles/${username}/posts`);
+  expect(archiveAfterTrash.status()).toBe(200);
+  const archiveAfterTrashBody = JSON.stringify(await archiveAfterTrash.json());
+  expect(archiveAfterTrashBody).not.toContain(postId);
+  expect(archiveAfterTrashBody).not.toContain("Synthetic released public dayli.");
   await restrictedVisitor.reload();
   await expect(restrictedVisitor.getByText("Synthetic released public dayli.")).toHaveCount(0);
   await restrictedVisitor.goBack();
@@ -388,20 +400,26 @@ test("friend intent signs in, refetches, and mutates only after confirmation", a
 test("message intent signs in and creates one request only after send", async ({ browser, page }, testInfo) => {
   const fixture = await setupIntentFixture(browser, page, testInfo, false);
   const raw = `/u/${fixture.author}?intent=message-request`;
-  const conversations = () => Number(database(`select count(*) from conversations where user_low_id = least('${fixture.authorId}', '${fixture.viewerId}') and user_high_id = greatest('${fixture.authorId}', '${fixture.viewerId}')`));
+  const messageBody = `Explicit message request ${fixture.viewer}.`;
+  const messages = () => Number(database(`select count(*) from messages m join conversations c on c.id = m.conversation_id where m.sender_id = '${fixture.viewerId}' and m.body = '${messageBody}' and c.user_low_id = least('${fixture.authorId}', '${fixture.viewerId}') and c.user_high_id = greatest('${fixture.authorId}', '${fixture.viewerId}')`));
   await fixture.page.goto(`/u/${fixture.author}`);
   await fixture.page.getByRole("link", { name: "message" }).click();
   await signInFromIntent(fixture.page, fixture.viewerEmail, fixture.password, new RegExp(`/u/${fixture.author}$`));
   await expect(fixture.page.getByText(/Review this profile/)).toBeVisible();
-  expect(conversations()).toBe(0);
+  expect(messages()).toBe(0);
   await fixture.page.getByRole("link", { name: "message", exact: true }).click();
-  expect(conversations()).toBe(0);
-  await fixture.page.getByRole("textbox", { name: "Message" }).fill("Explicit message request.");
+  expect(messages()).toBe(0);
+  await fixture.page.getByRole("textbox", { name: "Message" }).fill(messageBody);
   await fixture.page.getByRole("button", { name: "send", exact: true }).click();
-  await expect.poll(conversations).toBe(1);
+  await expect.poll(messages).toBe(1);
+  const clientMessageId = database(`select m.client_message_id from messages m join conversations c on c.id = m.conversation_id where m.sender_id = '${fixture.viewerId}' and m.body = '${messageBody}' and c.user_low_id = least('${fixture.authorId}', '${fixture.viewerId}') and c.user_high_id = greatest('${fixture.authorId}', '${fixture.viewerId}')`);
+  expect(clientMessageId).not.toBe("");
+  const exactMessage = () => Number(database(`select count(*) from messages where sender_id = '${fixture.viewerId}' and body = '${messageBody}' and client_message_id = '${clientMessageId}'`));
+  expect(exactMessage()).toBe(1);
   await fixture.page.goto(raw);
   await expect(fixture.page.getByText(/Review this profile/)).toHaveCount(0);
-  expect(conversations()).toBe(1);
+  expect(messages()).toBe(1);
+  expect(exactMessage()).toBe(1);
   await fixture.anonymous.close();
 });
 
