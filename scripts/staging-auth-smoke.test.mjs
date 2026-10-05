@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
-import { createSafeReporter, runSmoke, STAGING_ORIGIN } from "../apps/web/scripts/staging-auth-smoke.mjs";
+import { createSafeReporter, runSmoke, safeDestination, STAGING_ORIGIN } from "../apps/web/scripts/staging-auth-smoke.mjs";
 import { readStagingReleaseAttribution } from "./validate-staging-auth-attribution.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
@@ -136,7 +136,8 @@ function browserType(options = {}) {
             }
             state.session = !options.sessionMissingAfterFailedLogin && !options.signInRequestMissing
               && !options.signInResponseMissing && (options.signInHttpStatus ?? 200) === 200;
-            if (!options.loginNavigationFails && state.session) currentUrl = protectedUrl;
+            if (options.signInDestination) currentUrl = options.signInDestination;
+            else if (!options.loginNavigationFails && state.session) currentUrl = protectedUrl;
           } };
         }
         if (locator.name === "Sign out") {
@@ -308,6 +309,46 @@ test("a Cloudflare analytics abort cannot hide a phase-race external request", a
   assert.ok(result.fake.state.abortedOrigins.includes("cloudflare-analytics"));
   assert.ok(result.fake.state.abortedOrigins.includes("journey-locator"));
   assert.match(result.output, /step=journey outcome=failed .*category=unexpected_host/);
+  assertNoSensitiveOutput(result);
+});
+
+test("destination labels are fixed and never contain browser URL data", () => {
+  const cases = [
+    [`${STAGING_ORIGIN}/settings?smoke=auth`, "settings_exact"],
+    [`${STAGING_ORIGIN}/settings?secret=private-password`, "settings_other"],
+    [`${STAGING_ORIGIN}/sign-in?next=%2Fsettings%3Fsmoke%3Dauth`, "sign_in_expected"],
+    [`${STAGING_ORIGIN}/sign-in?next=private-password`, "sign_in_other"],
+    [`${STAGING_ORIGIN}/auth/session-refresh?returnTo=%2Fsettings%3Fsmoke%3Dauth`, "session_refresh_expected"],
+    [`${STAGING_ORIGIN}/auth/session-refresh?returnTo=private-password`, "session_refresh_other"],
+    [`${STAGING_ORIGIN}/legal/acceptance?token=private-password`, "legal_acceptance"],
+    [`${STAGING_ORIGIN}/setup-username?next=private-password`, "setup_username"],
+    [`${STAGING_ORIGIN}/home?token=private-password`, "home"],
+    [`${STAGING_ORIGIN}/?token=private-password`, "landing"],
+    [`${STAGING_ORIGIN}/unrecognized/private-password`, "other_staging"],
+    ["https://private-password.example.test/path", "off_origin"],
+    ["private-password", "unknown"],
+  ];
+  for (const [url, label] of cases) assert.equal(safeDestination(url), label);
+  const output = [];
+  const report = createSafeReporter((line) => output.push(line));
+  report({ step: "diagnostic", outcome: "observed", durationMs: 0, phase: "login_failure", destination: "private-password" });
+  assert.match(output[0], /phase=login_failure destination=unknown$/);
+  assert.doesNotMatch(output[0], /private-password/);
+});
+
+test("failed navigation reports a fixed destination before cleanup changes the page", async () => {
+  const result = await runDefault({ signInDestination: `${STAGING_ORIGIN}/legal/acceptance?token=private-password` });
+  assert.equal(result.passed, false);
+  assert.match(result.output, /step=diagnostic .*phase=login_failure destination=legal_acceptance/);
+  assert.match(result.output, /category=login_cookie_created_navigation_timeout/);
+  assert.match(result.output, /step=cleanup outcome=passed/);
+  assertNoSensitiveOutput(result);
+});
+
+test("failed cleanup reports its final destination without exposing a query", async () => {
+  const result = await runDefault({ signOutFails: true, errorText: "private-password" });
+  assert.equal(result.passed, false);
+  assert.match(result.output, /step=diagnostic .*phase=cleanup_failure destination=settings_exact/);
   assertNoSensitiveOutput(result);
 });
 

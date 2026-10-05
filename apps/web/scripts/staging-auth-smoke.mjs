@@ -30,6 +30,22 @@ function isTrustedUrl(value) {
   }
 }
 
+// Only fixed route labels leave the browser. URL paths and queries are never reported.
+export function safeDestination(value) {
+  let url;
+  try { url = new URL(value); }
+  catch { return "unknown"; }
+  if (url.origin !== STAGING_ORIGIN) return "off_origin";
+  if (url.pathname === "/settings") return url.search === "?smoke=auth" ? "settings_exact" : "settings_other";
+  if (url.pathname === "/sign-in") return url.searchParams.get("next") === PROTECTED_PATH ? "sign_in_expected" : "sign_in_other";
+  if (url.pathname === "/auth/session-refresh") return url.searchParams.get("returnTo") === PROTECTED_PATH ? "session_refresh_expected" : "session_refresh_other";
+  if (url.pathname === "/legal/acceptance") return "legal_acceptance";
+  if (url.pathname === "/setup-username") return "setup_username";
+  if (url.pathname === "/home") return "home";
+  if (url.pathname === "/") return "landing";
+  return "other_staging";
+}
+
 function isPath(page, pathname, search) {
   try {
     const url = new URL(page.url());
@@ -62,9 +78,17 @@ function isInjectedCloudflareAnalyticsScript(request) {
 
 /** Emit only allowlisted fields. Never pass exception text or browser values here. */
 export function createSafeReporter(write = (line) => process.stdout.write(`${line}\n`)) {
-  return ({ step, outcome, durationMs, category }) => {
+  return ({ step, outcome, durationMs, category, phase, destination }) => {
     const fields = [`staging_auth_smoke step=${step}`, `outcome=${outcome}`, `duration_ms=${durationMs}`];
     if (category) fields.push(`category=${category}`);
+    if (step === "diagnostic" && ["login_failure", "cleanup_failure"].includes(phase)) {
+      fields.push(`phase=${phase}`);
+      fields.push(`destination=${[
+        "unknown", "off_origin", "settings_exact", "settings_other", "sign_in_expected",
+        "sign_in_other", "session_refresh_expected", "session_refresh_other", "legal_acceptance",
+        "setup_username", "home", "landing", "other_staging",
+      ].includes(destination) ? destination : "unknown"}`);
+    }
     write(fields.join(" "));
   };
 }
@@ -168,7 +192,7 @@ async function verifySessionCookie(context, unexpectedHost, phaseBaseline) {
   }
 }
 
-async function defaultJourney({ context, page, unexpectedHost, journeyBaseline, markSessionPossible, markLoggedOut, email, password }) {
+async function defaultJourney({ context, page, unexpectedHost, journeyBaseline, markSessionPossible, markLoggedOut, reportDiagnostic, email, password }) {
   await visit(page, "/", unexpectedHost, journeyBaseline);
   await visit(page, PROTECTED_PATH, unexpectedHost, journeyBaseline);
   await verifySignInDestination(page, unexpectedHost, journeyBaseline);
@@ -187,6 +211,7 @@ async function defaultJourney({ context, page, unexpectedHost, journeyBaseline, 
     await page.waitForURL((url) => url.origin === STAGING_ORIGIN && url.pathname === "/settings" && url.search === "?smoke=auth", { timeout: STEP_TIMEOUT_MS });
     checkPhase(unexpectedHost, journeyBaseline);
   } catch {
+    reportDiagnostic("login_failure", page);
     if (unexpectedHost.count > journeyBaseline) throw failure("unexpected_host");
     let category;
     try { category = await loginFailureCategory(context, signIn); }
@@ -306,6 +331,7 @@ export async function runSmoke({ browserType, reporter = createSafeReporter(), j
     page = await context.newPage();
     const journeyBaseline = unexpectedHost.count;
     await journey({
+      reportDiagnostic: (phase, currentPage) => reporter({ step: "diagnostic", outcome: "observed", durationMs: Date.now() - startedAt, phase, destination: safeDestination(currentPage.url()) }),
       context,
       page,
       unexpectedHost,
@@ -333,6 +359,7 @@ export async function runSmoke({ browserType, reporter = createSafeReporter(), j
       reporter({ step: "cleanup", outcome: "passed", durationMs: Date.now() - cleanupStartedAt });
     } catch {
       passed = false;
+      if (page) reporter({ step: "diagnostic", outcome: "observed", durationMs: Date.now() - cleanupStartedAt, phase: "cleanup_failure", destination: safeDestination(page.url()) });
       reporter({ step: "cleanup", outcome: "failed", durationMs: Date.now() - cleanupStartedAt, category: "cleanup_failed" });
       try {
         if (browser) await browser.close();
