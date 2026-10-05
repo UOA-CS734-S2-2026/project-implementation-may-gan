@@ -136,25 +136,46 @@ export async function requestProofJson<T>(
   catch { return failGuard(diagnostic, "invalid_json"); }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function requireProofRecordValue(diagnostic: ProtocolDiagnostic, value: unknown): Record<string, unknown> {
+  if (!isRecord(value)) return failGuard(diagnostic, "invalid_response_contract");
+  return value;
+}
+
+export async function requestProofRecord(
+  diagnostic: ProtocolDiagnostic,
+  operation: ProofOperation,
+  origin: string,
+  path: string,
+  init: RequestInit = {},
+  expected = 200,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ response: Response; body: Record<string, unknown> }> {
+  const result = await requestProofJson<unknown>(diagnostic, operation, origin, path, init, expected, fetchImpl);
+  return { response: result.response, body: requireProofRecordValue(diagnostic, result.body) };
+}
+
 async function createAccount(origin: string, marker: string, ordinal: number, diagnostic: ProtocolDiagnostic): Promise<string> {
-  const current = (await requestProofJson<{ status: string; termsVersionId?: string; termsContentDigest?: string }>(
-    diagnostic, "legal_current", origin, "/api/v1/legal/current",
-  )).body;
+  const current = (await requestProofRecord(diagnostic, "legal_current", origin, "/api/v1/legal/current")).body;
   if (current.status !== "effective" || typeof current.termsVersionId !== "string" ||
       typeof current.termsContentDigest !== "string" || !/^[a-f0-9]{64}$/.test(current.termsContentDigest)) {
     return failGuard(diagnostic, "invalid_response_contract");
   }
-  const intent = (await requestProofJson<{ token: string; binding: string }>(diagnostic, "registration_intent", origin, "/api/v1/legal/registration-intent", {
+  const intent = (await requestProofRecord(diagnostic, "registration_intent", origin, "/api/v1/legal/registration-intent", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
       flow: "email", termsVersionId: current.termsVersionId, termsContentDigest: current.termsContentDigest,
       acceptedTermsAndDeclaredAge16: true,
     }),
   })).body;
-  if (!/^[a-f0-9]{64}$/.test(intent.token) || !/^[a-f0-9]{64}$/.test(intent.binding)) {
+  if (typeof intent.token !== "string" || !/^[a-f0-9]{64}$/.test(intent.token) ||
+      typeof intent.binding !== "string" || !/^[a-f0-9]{64}$/.test(intent.binding)) {
     return failGuard(diagnostic, "invalid_response_contract");
   }
   const suffix = marker.slice(-16);
-  const signup = await requestProofJson<unknown>(diagnostic, "email_signup", origin, "/api/auth/sign-up/email", {
+  const signup = await requestProofRecord(diagnostic, "email_signup", origin, "/api/auth/sign-up/email", {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -175,48 +196,56 @@ async function createAccount(origin: string, marker: string, ordinal: number, di
 
 async function createFixture(origin: string, token: string, marker: string, ordinal: number, diagnostic: ProtocolDiagnostic): Promise<Fixture> {
   const authorization = { authorization: `Bearer ${token}` };
-  const reservation = (await requestProofJson<{ id: string; upload: { url: string; method: string; requiredHeaders: Record<string, string> } }>(
-    diagnostic, "media_reserve", origin, "/api/v1/media-reservations", {
+  const reservation = (await requestProofRecord(diagnostic, "media_reserve", origin, "/api/v1/media-reservations", {
     method: "POST", headers: { ...authorization, "content-type": "application/json" },
     body: JSON.stringify({ contentType: "image/jpeg", byteSize: jpeg.byteLength }),
   }, 201)).body;
-  if (!reservation.id || reservation.upload?.method !== "PUT" || !reservation.upload.url ||
-      !reservation.upload.requiredHeaders || typeof reservation.upload.requiredHeaders !== "object") {
+  const reservationUpload = requireProofRecordValue(diagnostic, reservation.upload);
+  const requiredHeaders = requireProofRecordValue(diagnostic, reservationUpload.requiredHeaders);
+  if (typeof reservation.id !== "string" || reservationUpload.method !== "PUT" ||
+      typeof reservationUpload.url !== "string" ||
+      !Object.values(requiredHeaders).every((value) => typeof value === "string")) {
     return failGuard(diagnostic, "invalid_response_contract");
   }
-  const uploadHeaders = new Headers(reservation.upload.requiredHeaders);
+  const uploadHeaders = new Headers(requiredHeaders as Record<string, string>);
   diagnostic.operation = "media_upload";
   diagnostic.httpStatus = null;
   diagnostic.guardType = null;
   let upload: Response;
-  try { upload = await fetch(reservation.upload.url, { method: "PUT", headers: uploadHeaders, body: jpeg }); }
+  try { upload = await fetch(reservationUpload.url as string, { method: "PUT", headers: uploadHeaders, body: jpeg }); }
   catch { return failGuard(diagnostic, "transport_failure"); }
   diagnostic.httpStatus = upload.status;
   if (!upload.ok) return failGuard(diagnostic, "unexpected_http_status");
-  const complete = (await requestProofJson<{ status: string }>(diagnostic, "media_complete", origin, `/api/v1/media-reservations/${encodeURIComponent(reservation.id)}/complete`, {
+  const complete = (await requestProofRecord(diagnostic, "media_complete", origin, `/api/v1/media-reservations/${encodeURIComponent(reservation.id)}/complete`, {
     method: "POST", headers: authorization,
   })).body;
   if (complete.status !== "validated") return failGuard(diagnostic, "invalid_response_contract");
-  const day = (await requestProofJson<{ localDate: string; prompt: { id: string } }>(
+  const day = (await requestProofRecord(
     diagnostic, "posting_day", origin, "/api/v1/posting-days/current", { headers: authorization },
   )).body;
-  if (!day.localDate || !day.prompt?.id) return failGuard(diagnostic, "invalid_response_contract");
-  const created = (await requestProofJson<{ id: string; authorId: string; media: Array<{ id: string }> }>(diagnostic, "post_create", origin, "/api/v1/posts", {
+  const prompt = requireProofRecordValue(diagnostic, day.prompt);
+  if (typeof day.localDate !== "string" || typeof prompt.id !== "string") {
+    return failGuard(diagnostic, "invalid_response_contract");
+  }
+  const created = (await requestProofRecord(diagnostic, "post_create", origin, "/api/v1/posts", {
     method: "POST",
     headers: { ...authorization, "content-type": "application/json", "idempotency-key": randomUUID() },
     body: JSON.stringify({
       localDate: day.localDate,
-      promptId: day.prompt.id,
+      promptId: prompt.id,
       reflectiveAnswer: `${marker}:${ordinal}`,
       rating: 5,
       audience: "solo",
       attachments: [reservation.id],
     }),
   }, 201)).body;
-  if (!created.id || !created.authorId || !Array.isArray(created.media) || created.media.length !== 1 || !created.media[0]?.id) {
+  if (typeof created.id !== "string" || typeof created.authorId !== "string" || !Array.isArray(created.media) ||
+      created.media.length !== 1) return failGuard(diagnostic, "invalid_response_contract");
+  const media = requireProofRecordValue(diagnostic, created.media[0]);
+  if (typeof media.id !== "string") {
     return failGuard(diagnostic, "invalid_response_contract");
   }
-  const fixture = { ownerId: created.authorId, postId: created.id, mediaId: created.media[0].id,
+  const fixture = { ownerId: created.authorId, postId: created.id, mediaId: media.id,
     reservationId: reservation.id, objectKey: `media/${created.authorId}/${reservation.id}`, generation: 0 };
   if (await objectIsAbsent(fixture.objectKey, diagnostic, "object_pretrash_head")) {
     return failGuard(diagnostic, "storage_presence_mismatch");
@@ -225,11 +254,11 @@ async function createFixture(origin: string, token: string, marker: string, ordi
 }
 
 async function trashFixture(origin: string, token: string, fixture: Fixture, diagnostic: ProtocolDiagnostic): Promise<void> {
-  const trashed = (await requestProofJson<{ generation: number }>(diagnostic, "post_trash", origin,
+  const trashed = (await requestProofRecord(diagnostic, "post_trash", origin,
     `/api/v1/posts/${encodeURIComponent(fixture.postId)}/trash`, {
       method: "POST", headers: { authorization: `Bearer ${token}` },
     })).body;
-  if (!Number.isSafeInteger(trashed.generation) || trashed.generation < 1) {
+  if (typeof trashed.generation !== "number" || !Number.isSafeInteger(trashed.generation) || trashed.generation < 1) {
     return failGuard(diagnostic, "invalid_response_contract");
   }
   fixture.generation = trashed.generation;
@@ -237,18 +266,20 @@ async function trashFixture(origin: string, token: string, fixture: Fixture, dia
 
 async function proveAndRestore(origin: string, token: string, fixture: Fixture, diagnostic: ProtocolDiagnostic): Promise<void> {
   const headers = { authorization: `Bearer ${token}` };
-  await requestProofJson(diagnostic, "post_hidden_read", origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}`, { headers }, 404);
-  await requestProofJson(diagnostic, "media_hidden_read", origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}/media/${encodeURIComponent(fixture.mediaId)}`, { headers }, 404);
-  const list = (await requestProofJson<{ posts: Array<{ id?: string }> }>(diagnostic, "trash_list", origin, "/api/v1/posts/trash", { headers })).body;
-  if (!Array.isArray(list.posts) || !list.posts.some((post) => post.id === fixture.postId)) {
+  await requestProofRecord(diagnostic, "post_hidden_read", origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}`, { headers }, 404);
+  await requestProofRecord(diagnostic, "media_hidden_read", origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}/media/${encodeURIComponent(fixture.mediaId)}`, { headers }, 404);
+  const list = (await requestProofRecord(diagnostic, "trash_list", origin, "/api/v1/posts/trash", { headers })).body;
+  if (!Array.isArray(list.posts)) return failGuard(diagnostic, "invalid_response_contract");
+  const trashPosts = list.posts.map((post) => requireProofRecordValue(diagnostic, post));
+  if (!trashPosts.some((post) => post.id === fixture.postId)) {
     return failGuard(diagnostic, "invalid_response_contract");
   }
-  const restored = (await requestProofJson<{ status: string }>(diagnostic, "post_restore", origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}/restore`, {
+  const restored = (await requestProofRecord(diagnostic, "post_restore", origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}/restore`, {
     method: "POST", headers,
   })).body;
   if (restored.status !== "restored") return failGuard(diagnostic, "invalid_response_contract");
-  await requestProofJson(diagnostic, "post_restored_read", origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}`, { headers });
-  await requestProofJson(diagnostic, "media_restored_read", origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}/media/${encodeURIComponent(fixture.mediaId)}`, { headers });
+  await requestProofRecord(diagnostic, "post_restored_read", origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}`, { headers });
+  await requestProofRecord(diagnostic, "media_restored_read", origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}/media/${encodeURIComponent(fixture.mediaId)}`, { headers });
 }
 
 export async function seedPastDeadline(tx: TransactionSql, input: Fixture & { marker: string }): Promise<string> {

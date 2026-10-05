@@ -7,6 +7,8 @@ import {
   createProtocolDiagnostic,
   discoverExpectedMigrationLedger,
   requestProofJson,
+  requestProofRecord,
+  requireProofRecordValue,
   validateMarker,
   validateProofTarget,
 } from "../packages/db/scripts/staging-trash-lifecycle-proof";
@@ -129,6 +131,26 @@ test("records only fixed operation, numeric status, and guard categories for pro
     async () => { throw new Error("credential-like-private-detail"); }));
   assert.deepEqual(diagnostic, { operation: "media_upload", httpStatus: null, guardType: "transport_failure" });
   assert.doesNotMatch(JSON.stringify(diagnostic), /private|credential|detail/);
+});
+
+test("classifies valid JSON non-record response shapes without dereferencing them", async () => {
+  for (const body of [null, [], "text", true, 7]) {
+    const diagnostic = createProtocolDiagnostic();
+    await assert.rejects(requestProofRecord(diagnostic, "legal_current", "https://api.example.test", "/legal", {}, 200,
+      async () => Response.json(body)));
+    assert.deepEqual(diagnostic, { operation: "legal_current", httpStatus: 200, guardType: "invalid_response_contract" });
+  }
+
+  for (const [operation, nested] of [
+    ["media_reserve", null],
+    ["posting_day", []],
+    ["post_create", "not-media"],
+    ["trash_list", 4],
+  ] as const) {
+    const diagnostic = { operation, httpStatus: 200, guardType: null };
+    assert.throws(() => requireProofRecordValue(diagnostic, nested));
+    assert.deepEqual(diagnostic, { operation, httpStatus: 200, guardType: "invalid_response_contract" });
+  }
 });
 
 test("maps proof phases to sanitized failure categories", () => {
