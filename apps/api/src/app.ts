@@ -524,7 +524,7 @@ export function createAppForEnv(env: ApiEnv) {
     policies: createHyperdriveAccountPolicyResolver(configuration.hyperdrive),
   } satisfies AccountPolicyDependencies : undefined;
   const deletionActivation = configuration
-    ? readDeletionRequestActivation(env, configuration.baseURL)
+    ? readDeletionRequestActivation(env, configuration.publicApiBaseURL)
     : { enabled: false as const };
   const deletion = configuration ? {
     resolveSession: createSessionResolver(configuration),
@@ -532,18 +532,15 @@ export function createAppForEnv(env: ApiEnv) {
     cancel: (input: Parameters<typeof cancelAccountDeletion>[1]) => withHyperdriveDatabase(
       configuration.hyperdrive, (database) => cancelAccountDeletion(database, input),
     ),
-    // A live durable object is required so an accepted request also fences active sockets.
-    // Production remains inert because activation only accepts the staging API origin.
-    requestEnabled: deletionActivation.enabled && !!env.USER_REALTIME,
-    request: deletionActivation.enabled && env.USER_REALTIME ? (input: Parameters<typeof requestAccountDeletion>[1]) => {
+    // The repository command is deliberately not mounted yet. A one-shot DO
+    // call after commit cannot prove existing sockets were fenced if it fails.
+    // Keep this fail closed until the purge subsystem supplies durable retry,
+    // monitoring, and reconciliation evidence for realtime revocation.
+    requestEnabled: false,
+    request: deletionActivation.enabled ? (input: Parameters<typeof requestAccountDeletion>[1]) => {
       if (input.userId !== deletionActivation.allowedUserId) return Promise.resolve({ status: "conflict" as const });
       return withHyperdriveDatabase(configuration.hyperdrive, (database) => requestAccountDeletion(database, input));
     } : undefined,
-    revokeSessions: deletionActivation.enabled && env.USER_REALTIME ? async (userId: string, sessionIds: readonly string[]) => {
-      const publisher = createDurableObjectRealtimePublisher(env.USER_REALTIME!, configuration.hyperdrive);
-      await Promise.all(sessionIds.map((sessionId) => publisher.revokeSession(userId, sessionId)));
-    } : undefined,
-    onRevocationFailure: () => console.error("dayli account deletion realtime revocation failed after request commit"),
   } satisfies DeletionRouteDependencies : undefined;
   const allStagingExports = stagingExportAllUsersEnabled(env);
   const stagingExportProof = allStagingExports ? null : readStagingExportProof(env);

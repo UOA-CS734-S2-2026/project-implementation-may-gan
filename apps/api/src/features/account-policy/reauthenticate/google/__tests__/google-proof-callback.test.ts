@@ -59,7 +59,13 @@ describe("isolated Google management callback", () => {
     expect(result.status).toBe(200);
     expect(result.headers.get("cache-control")).toBe("no-store");
     expect(result.headers.get("referrer-policy")).toBe("no-referrer");
-    await expect(result.json()).resolves.toEqual({ action: "request_deletion", token: "d".repeat(64), expiresAt: new Date(now.getTime() + 300_000).toISOString() });
+    expect(result.headers.get("content-type")).toContain("text/html");
+    const body = await result.text();
+    expect(body).toContain('type":"dayli.account-management-grant"');
+    expect(body).toContain(`token":"${"d".repeat(64)}"`);
+    expect(body).toContain("postMessage(grant,window.location.origin)");
+    expect(body).not.toContain('postMessage(grant,"*")');
+    expect(result.url).not.toContain("token=");
     expect(configured.claim).toHaveBeenCalledWith({ state, userId: "owner", sessionId: "original-session" });
     expect(configured.complete).toHaveBeenCalledWith({ userId: "owner", sessionId: "original-session", action: "request_deletion", stateDigest: "c".repeat(64), verifiedSubject: subject });
   });

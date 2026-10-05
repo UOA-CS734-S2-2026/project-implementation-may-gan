@@ -18,9 +18,11 @@ export function readDeletionRequestActivation(
     | "STAGING_ACCOUNT_DELETION_PURGE_PROVEN"
     | "STAGING_ACCOUNT_DELETION_PROOF_USER_ID"
   >,
-  baseUrl: string,
+  publicApiBaseUrl: string,
 ): DeletionRequestActivation {
-  if (baseUrl !== stagingOrigin) return { enabled: false };
+  // Auth may run on the web origin when browser proxy mode is enabled. The
+  // staging admission is about the direct API that owns deletion processing.
+  if (publicApiBaseUrl !== stagingOrigin) return { enabled: false };
   if (env.STAGING_ACCOUNT_DELETION_APPROVED !== "request-deletion-staging") return { enabled: false };
   if (env.STAGING_ACCOUNT_DELETION_PROOF_APPROVED !== "owner-flow-reviewed") return { enabled: false };
   if (env.STAGING_ACCOUNT_DELETION_PURGE_PROVEN !== "purge-subsystem-proven") return { enabled: false };

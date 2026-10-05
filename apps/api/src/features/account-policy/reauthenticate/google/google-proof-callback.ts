@@ -8,7 +8,7 @@ const headers = {
   "Cache-Control": "no-store",
   "Referrer-Policy": "no-referrer",
   "X-Content-Type-Options": "nosniff",
-  "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+  "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
 };
 
 export interface GoogleManagementCallbackDependencies {
@@ -31,6 +31,17 @@ export interface GoogleManagementCallbackDependencies {
 
 function failure(status: number): Response {
   return Response.json({ error: { code: "GOOGLE_MANAGEMENT_PROOF_FAILED" } }, { status, headers });
+}
+
+/**
+ * The single-use grant never enters a URL. A popup can deliver it only to its
+ * opener, which verifies the callback origin before using the action-bound
+ * grant. A same-tab fallback deliberately exposes no token to the document.
+ */
+function success(action: AccountManagementAction, token: string): Response {
+  const payload = JSON.stringify({ type: "dayli.account-management-grant", action, token });
+  const body = `<!doctype html><meta charset="utf-8"><title>Google verification complete</title><script>const grant=${payload};if(window.opener){window.opener.postMessage(grant,window.location.origin);window.close()}else{document.body.textContent="Google verification complete. Return to Dayli to continue."}</script>`;
+  return new Response(body, { status: 200, headers: { ...headers, "Content-Type": "text/html; charset=utf-8" } });
 }
 
 /** The callback never calls Better Auth's login or linking handler. */
@@ -62,9 +73,7 @@ export async function handleGoogleManagementCallback(request: Request, deps: Goo
   } catch { return failure(401); }
   try {
     const grant = await deps.complete({ ...actor, action: intent.action, stateDigest: intent.stateDigest, verifiedSubject: proof.subject });
-    return grant
-      ? Response.json({ action: intent.action, token: grant.token, expiresAt: grant.expiresAt.toISOString() }, { status: 200, headers })
-      : failure(409);
+    return grant ? success(intent.action, grant.token) : failure(409);
   } catch { return failure(503); }
 }
 

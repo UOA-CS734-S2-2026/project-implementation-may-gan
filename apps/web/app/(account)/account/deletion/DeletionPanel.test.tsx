@@ -2,9 +2,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  session: vi.fn(), status: vi.fn(), password: vi.fn(), request: vi.fn(), cancel: vi.fn(), google: vi.fn(), key: vi.fn(),
+  session: vi.fn(), status: vi.fn(), password: vi.fn(), request: vi.fn(), cancel: vi.fn(), google: vi.fn(), key: vi.fn(), signOut: vi.fn(),
 }));
 vi.mock("@/lib/session/hooks", () => ({ useSession: mocks.session }));
+vi.mock("@/lib/auth/client", () => ({ authClient: { signOut: mocks.signOut } }));
 vi.mock("@/lib/account/deletion", () => ({
   getDeletionStatus: mocks.status, proveDeletionWithPassword: mocks.password,
   requestDeletion: mocks.request, cancelDeletion: mocks.cancel,
@@ -19,6 +20,7 @@ beforeEach(() => {
   mocks.session.mockReturnValue({ user: { id: "owner" }, isPending: false });
   mocks.status.mockResolvedValue(active);
   mocks.key.mockReturnValue("idempotency-key-0001");
+  mocks.signOut.mockResolvedValue(undefined);
 });
 
 describe("account deletion owner flow", () => {
@@ -42,6 +44,32 @@ describe("account deletion owner flow", () => {
     fireEvent.click(submit);
     await waitFor(() => expect(mocks.request).toHaveBeenCalledWith("a".repeat(64), "idempotency-key-0001"));
     expect(mocks.password).toHaveBeenCalledWith("request_deletion", "current-password");
+    await screen.findByText(/request was accepted/);
+    expect(mocks.signOut).toHaveBeenCalledOnce();
+  });
+
+  it("receives a popup Google grant only from the API origin and submits it after consent", async () => {
+    const assign = vi.fn();
+    const popup = { location: { assign }, close: vi.fn() };
+    vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
+    mocks.google.mockResolvedValue("https://accounts.google.test/authorize");
+    mocks.request.mockResolvedValue(undefined);
+    render(<DeletionPanel requestEnabled />);
+    await screen.findByText("Status: active");
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: "Verify with Google instead" }));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith("https://accounts.google.test/authorize"));
+    window.dispatchEvent(new MessageEvent("message", { origin: "https://attacker.test", data: {
+      type: "dayli.account-management-grant", action: "request_deletion", token: "b".repeat(64),
+    } }));
+    expect(screen.queryByText(/Google verification complete/)).not.toBeInTheDocument();
+    window.dispatchEvent(new MessageEvent("message", { origin: window.location.origin, data: {
+      type: "dayli.account-management-grant", action: "request_deletion", token: "b".repeat(64),
+    } }));
+    await screen.findByText(/Google verification complete/);
+    fireEvent.click(screen.getByRole("button", { name: "Request deletion" }));
+    await waitFor(() => expect(mocks.request).toHaveBeenCalledWith("b".repeat(64), "idempotency-key-0001"));
+    expect(mocks.password).not.toHaveBeenCalled();
   });
 
   it("uses the cancellation action only while the database-backed pending state is returned", async () => {
