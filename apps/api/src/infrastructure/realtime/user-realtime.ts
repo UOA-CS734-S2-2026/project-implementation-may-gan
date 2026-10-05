@@ -1,5 +1,5 @@
 import { schema, createHyperdriveDatabase, type HyperdriveBinding } from "@dayli/db";
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, eq, gt, notExists, sql } from "drizzle-orm";
 import { realtimeEventSchema, type ConversationChangedEvent } from "@dayli/contracts";
 
 interface SocketAttachment {
@@ -22,6 +22,12 @@ export class UserRealtime {
 
   async fetch(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname;
+    if (path === "/revoke-deletion" && request.method === "POST") {
+      const body = await request.json().catch(() => null) as { generation?: unknown } | null;
+      if (!body || !Number.isSafeInteger(body.generation) || Number(body.generation) < 1) return new Response("Invalid generation.", { status: 400 });
+      const current = await this.revokeDeletionGeneration(Number(body.generation));
+      return Response.json({ current });
+    }
     if (path === "/publish" && request.method === "POST") {
       const event = realtimeEventSchema.safeParse(await request.json().catch(() => undefined));
       if (!event.success || event.data.type !== "conversation.changed") return new Response("Invalid event.", { status: 400 });
@@ -66,6 +72,22 @@ export class UserRealtime {
     await this.scheduleNextExpiry();
   }
 
+  /** Duplicate and late generations close only sockets whose sessions are still invalid. */
+  async revokeDeletionGeneration(generation: number): Promise<boolean> {
+    if (!Number.isSafeInteger(generation) || generation < 1) return false;
+    // Snapshot before the first await. A post-cancellation connect accepted
+    // while reconciliation is in flight is not part of this old generation.
+    const sockets = this.ctx.getWebSockets();
+    for (const socket of sockets) {
+      const attachment = socket.deserializeAttachment() as SocketAttachment | null;
+      if (!attachment || !(await this.sessionIsActive(attachment))) {
+        socket.close(4401, "Account session revoked.");
+      }
+    }
+    await this.scheduleNextExpiry();
+    return true;
+  }
+
   async webSocketMessage(socket: WebSocket, message: ArrayBuffer | string): Promise<void> {
     const bytes = typeof message === "string" ? new TextEncoder().encode(message).byteLength : message.byteLength;
     // This protocol has no application data frames. Closing prevents the DO from becoming a message relay.
@@ -95,6 +117,11 @@ export class UserRealtime {
           eq(schema.session.id, attachment.sessionId),
           eq(schema.session.userId, attachment.userId),
           gt(schema.session.expiresAt, sql`now()`),
+          notExists(database.db.select({ userId: schema.accountLifecycles.userId })
+            .from(schema.accountLifecycles).where(and(
+              eq(schema.accountLifecycles.userId, attachment.userId),
+              sql`${schema.accountLifecycles.state} <> 'active'`,
+            ))),
         ))
         .limit(1);
       return session !== undefined;

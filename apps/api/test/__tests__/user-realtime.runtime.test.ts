@@ -49,7 +49,7 @@ describe("UserRealtime Durable Object", () => {
 
     expect(response.status).toBe(101);
     expect(database.create).toHaveBeenCalledOnce();
-    expect(database.select).toHaveBeenCalledOnce();
+    expect(database.select).toHaveBeenCalledTimes(2);
     expect(database.close).toHaveBeenCalledOnce();
   });
 
@@ -61,7 +61,7 @@ describe("UserRealtime Durable Object", () => {
     });
 
     expect(response.status).toBe(401);
-    expect(database.select).toHaveBeenCalledOnce();
+    expect(database.select).toHaveBeenCalledTimes(2);
   });
 
   it("denies expired verified metadata", async () => {
@@ -73,6 +73,25 @@ describe("UserRealtime Durable Object", () => {
 
     expect(response.status).toBe(401);
     expect(database.select).not.toHaveBeenCalled();
+  });
+
+  it("idempotently reconciles duplicate and stale deletion generations", async () => {
+    const realtime = (env as unknown as { USER_REALTIME: DurableObjectNamespace }).USER_REALTIME;
+    const stub = realtime.get(realtime.idFromName("generation-user"));
+    setSessionRows([{ id: "generation-session" }]);
+    const first = await realtime.get(realtime.idFromName("generation-user")).fetch("https://user-realtime.internal/connect", {
+      headers: sessionHeader("generation-user", "generation-session"),
+    });
+    expect(first.status).toBe(101);
+
+    setSessionRows([{ id: "generation-user" }]);
+    const revoke = (generation: number) => stub.fetch("https://user-realtime.internal/revoke-deletion", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ generation }),
+    });
+    await expect((await revoke(3)).json()).resolves.toEqual({ current: true });
+    await expect((await revoke(3)).json()).resolves.toEqual({ current: true });
+    setSessionRows([]);
+    await expect((await revoke(2)).json()).resolves.toEqual({ current: true });
   });
 
   it("rejects an upgrade without Worker-issued verified session metadata", async () => {

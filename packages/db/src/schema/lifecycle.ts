@@ -46,6 +46,9 @@ export const purgeReceiptOutcome = pgEnum("purge_receipt_outcome", ["completed"]
 export const accountPurgeObjectCleanupStatus = pgEnum("account_purge_object_cleanup_status", [
   "pending", "deleting", "failed", "completed",
 ]);
+export const accountRealtimeRevocationStatus = pgEnum("account_realtime_revocation_status", [
+  "pending", "leased", "completed", "superseded", "failed",
+]);
 
 export const operatorCaseType = pgEnum("operator_case_type", ["underage_report"]);
 export const operatorCaseStatus = pgEnum("operator_case_status", ["open", "reviewed", "restricted", "closed"]);
@@ -103,6 +106,35 @@ export const accountLifecycles = pgTable("account_lifecycles", {
       ${table.requestedAt} is not null and ${table.cancelUntil} = ${table.requestedAt} + interval '168 hours' and
       ${table.purgeDueAt} = ${table.requestedAt} + interval '336 hours' and
       ${table.purgeStartedAt} is not null and ${table.lastErrorCategory} is not null and ${table.nextAttemptAt} is not null)
+  `),
+]);
+
+/** Durable, content-free intent to close every socket from one deletion generation. */
+export const accountRealtimeRevocations = pgTable("account_realtime_revocations", {
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  lifecycleGeneration: bigint("lifecycle_generation", { mode: "number" }).notNull(),
+  status: accountRealtimeRevocationStatus("status").notNull().default("pending"),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
+  leaseToken: text("lease_token"),
+  leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+  failureCategory: text("failure_category"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  retentionExpiresAt: timestamp("retention_expires_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("account_realtime_revocations_user_generation_unique").on(table.userId, table.lifecycleGeneration),
+  index("account_realtime_revocations_due_idx").on(table.status, table.nextAttemptAt),
+  index("account_realtime_revocations_lease_idx").on(table.status, table.leaseExpiresAt),
+  index("account_realtime_revocations_retention_idx").on(table.status, table.retentionExpiresAt),
+  check("account_realtime_revocations_generation_check", sql`${table.lifecycleGeneration} between 1 and 9007199254740991`),
+  check("account_realtime_revocations_attempt_check", sql`${table.attemptCount} >= 0`),
+  check("account_realtime_revocations_lease_pair_check", sql`(${table.leaseToken} is null) = (${table.leaseExpiresAt} is null)`),
+  check("account_realtime_revocations_state_check", sql`
+    (${table.status} = 'pending' and ${table.nextAttemptAt} is not null and ${table.leaseToken} is null and ${table.completedAt} is null and ${table.retentionExpiresAt} is null) or
+    (${table.status} = 'leased' and ${table.nextAttemptAt} is null and ${table.leaseToken} is not null and ${table.completedAt} is null and ${table.retentionExpiresAt} is null) or
+    (${table.status} in ('completed', 'superseded', 'failed') and ${table.nextAttemptAt} is null and ${table.leaseToken} is null and ${table.completedAt} is not null and ${table.retentionExpiresAt} = ${table.completedAt} + interval '720 hours')
   `),
 ]);
 

@@ -1,0 +1,6 @@
+reason: Attempt counts are operational retry metadata incremented at most once per bounded scheduled claim, so a 32-bit counter cannot be reached in the system lifetime.
+affected_data_and_clients: The new empty outbox stores only retry counts and content-free lifecycle references. No existing rows are converted.
+rollout_sequence: Apply through the protected migration workflow and monitor aggregate pending age and claim counts.
+backup_checkpoint: Confirm the PostgreSQL restore checkpoint before protected-environment execution.
+forward_fix_plan: Add a reviewed forward migration to bigint if operational evidence invalidates the bounded-count assumption.
+reviewer: Required database CODEOWNER review before protected migration execution.

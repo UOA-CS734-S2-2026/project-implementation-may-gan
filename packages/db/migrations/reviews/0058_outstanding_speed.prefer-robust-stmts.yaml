@@ -1,0 +1,6 @@
+reason: The protected migration runner applies this forward-only empty outbox and its fenced procedures atomically. Existence guards could conceal a partially installed revocation authority.
+affected_data_and_clients: Adds an empty private realtime revocation table and SECURITY DEFINER procedures. No existing account or session rows are changed.
+rollout_sequence: Apply through the protected migration workflow, verify restricted-role claims and synthetic socket closure, then monitor aggregate backlog counts.
+backup_checkpoint: Confirm the PostgreSQL restore checkpoint before protected-environment execution.
+forward_fix_plan: Stop on failure, inspect aggregate state only, and ship a reviewed forward migration rather than editing this file.
+reviewer: Required database CODEOWNER and privacy-owner review before protected migration execution.
