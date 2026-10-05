@@ -35,10 +35,35 @@ export type FcmResult =
   | { ok: true }
   | { ok: false; retryable: boolean; category: "transient" | "rate_limited" | "provider_rejected" | "unauthorized" };
 
+export type FcmTransportReason = "connection_lost" | "connection_refused" | "dns_failure" | "tls_failure" | "timeout" | "subrequest_limit" | "cross_request_io" | "invalid_invocation" | "redirect_failed" | "unknown";
+
+/** Classify locally, but never return error text, URLs, codes or nested objects. */
+export function classifyFcmTransportFailure(error: unknown): FcmTransportReason {
+  try {
+    const entries = [error, typeof error === "object" && error !== null ? (error as { cause?: unknown }).cause : undefined];
+    for (const entry of entries) {
+      if (typeof entry !== "object" || entry === null) continue;
+      const { message, code, name } = entry as { message?: unknown; code?: unknown; name?: unknown };
+      const text = typeof message === "string" ? message : "";
+      if (/cannot perform i\/o on behalf of a different request/i.test(text)) return "cross_request_io";
+      if (/too many subrequests|subrequest limit/i.test(text)) return "subrequest_limit";
+      if (/illegal invocation|invalid invocation/i.test(text)) return "invalid_invocation";
+      if (code === "ENOTFOUND" || code === "EAI_AGAIN" || /dns lookup failed|dns resolution failed|failed to resolve/i.test(text)) return "dns_failure";
+      if (code === "ECONNREFUSED") return "connection_refused";
+      if (code === "ECONNRESET" || code === "EPIPE" || /network connection lost|connection reset|socket hang up/i.test(text)) return "connection_lost";
+      if (code === "ETIMEDOUT" || code === "UND_ERR_CONNECT_TIMEOUT" || name === "TimeoutError" || /connection timed out|connect timeout/i.test(text)) return "timeout";
+      if (code === "CERT_HAS_EXPIRED" || code === "DEPTH_ZERO_SELF_SIGNED_CERT" || code === "UNABLE_TO_VERIFY_LEAF_SIGNATURE" || /tls handshake|ssl handshake|certificate verify failed/i.test(text)) return "tls_failure";
+      if (/redirect mode.*error|redirect.*not allowed/i.test(text)) return "redirect_failed";
+    }
+  } catch { /* Treat unreadable exception properties as unknown. */ }
+  return "unknown";
+}
+
 export type FcmDiagnostic = {
   stage: "oauth" | "fcm";
   outcome: "accepted" | "signing_invalid" | "response_rejected" | "response_invalid" | "transport_failed" | "aborted";
   httpStatus?: number;
+  transportReason?: FcmTransportReason;
 };
 
 function responseStatus(value: unknown): number | undefined {
@@ -46,7 +71,7 @@ function responseStatus(value: unknown): number | undefined {
 }
 
 export class FcmOAuthError extends Error {
-  constructor(public readonly category: "signing_invalid" | "response_rejected" | "response_invalid" | "transport_failed", public readonly httpStatus?: number) {
+  constructor(public readonly category: "signing_invalid" | "response_rejected" | "response_invalid" | "transport_failed", public readonly httpStatus?: number, public readonly transportReason?: FcmTransportReason) {
     super(category);
   }
 }
@@ -97,8 +122,8 @@ export async function requestFcmOAuthToken(input: {
       redirect: "error",
       signal: input.signal,
     });
-  } catch {
-    throw new FcmOAuthError("transport_failed");
+  } catch (error) {
+    throw new FcmOAuthError("transport_failed", undefined, classifyFcmTransportFailure(error));
   }
   if (!response || typeof response !== "object" || typeof response.ok !== "boolean") {
     throw new FcmOAuthError("response_invalid");
@@ -139,7 +164,10 @@ export function createFcmHttpV1Sender(input: { serviceAccount: FcmServiceAccount
     } catch (error) {
       const outcome = signal?.aborted ? "aborted" : error instanceof FcmOAuthError ? error.category : "transport_failed";
       const httpStatus = error instanceof FcmOAuthError ? responseStatus(error.httpStatus) : undefined;
-      diagnose({ stage: "oauth", outcome, ...(httpStatus === undefined ? {} : { httpStatus }) });
+      const transportReason = outcome === "transport_failed"
+        ? error instanceof FcmOAuthError ? error.transportReason ?? "unknown" : classifyFcmTransportFailure(error)
+        : undefined;
+      diagnose({ stage: "oauth", outcome, ...(httpStatus === undefined ? {} : { httpStatus }), ...(transportReason === undefined ? {} : { transportReason }) });
       throw error;
     }
   }
@@ -165,8 +193,8 @@ export function createFcmHttpV1Sender(input: { serviceAccount: FcmServiceAccount
       if (response.status === 429) return { ok: false, retryable: true, category: "rate_limited" };
       if (response.status >= 500) return { ok: false, retryable: true, category: "transient" };
       return { ok: false, retryable: false, category: "provider_rejected" };
-    } catch {
-      if (stage === "fcm") diagnose({ stage, outcome: signal?.aborted ? "aborted" : "transport_failed" });
+    } catch (error) {
+      if (stage === "fcm") diagnose({ stage, outcome: signal?.aborted ? "aborted" : "transport_failed", ...(signal?.aborted ? {} : { transportReason: classifyFcmTransportFailure(error) }) });
       return { ok: false, retryable: true, category: "transient" };
     }
   }
