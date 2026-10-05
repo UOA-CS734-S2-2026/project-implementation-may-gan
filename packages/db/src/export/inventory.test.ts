@@ -109,7 +109,7 @@ describe("explicit export data inventory", () => {
   });
 
   it("keeps lifecycle and operational fields out of the inventory", () => {
-    for (const table of ["account_lifecycles", "account_purge_receipts", "data_export_requests",
+    for (const table of ["account_lifecycles", "account_purge_operator_control", "account_purge_receipts", "data_export_requests",
       "data_export_object_cleanup_tasks", "operator_cases", "post_idempotency_keys", "rateLimit",
       "future_self_note_deliveries", "future_self_note_idempotency_keys",
       "relationship_search_quota"] as const) {

@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
+  boolean,
   check,
   foreignKey,
   index,
@@ -266,6 +267,27 @@ export const dataExportRequests = pgTable("data_export_requests", {
       ${table.readyAt} is null and ${table.expiresAt} is null and ${table.failureCategory} is null) or
     (${table.status} = 'expired' and ${table.snapshotCutoffAt} is null and ${table.archiveObjectKey} is null and
       ${table.readyAt} is null and ${table.expiresAt} is null and ${table.archiveCleanupTaskId} is not null and ${table.failureCategory} is null)
+  `),
+]);
+
+/** Global default-off gate for the separately protected purge executor. */
+export const accountPurgeOperatorControl = pgTable("account_purge_operator_control", {
+  singleton: boolean("singleton").primaryKey().default(true),
+  paused: boolean("paused").notNull().default(true),
+  executeUntil: timestamp("execute_until", { withTimezone: true }),
+  generation: bigint("generation", { mode: "number" }).notNull().default(1),
+  reason: text("reason").notNull().default("default_off"),
+  actor: text("actor").notNull().default(sql`current_user`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  check("account_purge_operator_control_singleton_check", sql`${table.singleton}`),
+  check("account_purge_operator_control_generation_check", sql`${table.generation} > 0`),
+  check("account_purge_operator_control_reason_check", sql`char_length(${table.reason}) between 1 and 200`),
+  check("account_purge_operator_control_actor_check", sql`char_length(${table.actor}) between 1 and 200`),
+  check("account_purge_operator_control_state_check", sql`
+    (${table.paused} and ${table.executeUntil} is null) or
+    (not ${table.paused} and ${table.executeUntil} is not null
+      and ${table.executeUntil} <= ${table.updatedAt} + interval '15 minutes')
   `),
 ]);
 

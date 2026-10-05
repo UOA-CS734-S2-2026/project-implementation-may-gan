@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import postgres from "postgres";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { seedPastDeadline } from "../scripts/staging-trash-lifecycle-proof";
 // @ts-expect-error The staging preflight is a directly executed ESM script.
 import { inspectEligiblePostTrash } from "../../../scripts/verify-staging-post-trash-activation.mjs";
@@ -52,6 +52,11 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     await migrator`set time zone 'UTC'`;
     await app`set time zone 'UTC'`;
     await lifecycleWorker`set time zone 'UTC'`;
+  });
+
+  beforeEach(async () => {
+    await migrator`select public.set_account_purge_operator_pause(false,
+      clock_timestamp() + interval '15 minutes', 'isolated integration test', 'vitest')`;
   });
 
   afterAll(async () => {
@@ -127,13 +132,13 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
       select ${userId}, 'pending_deletion', ${requestId}, ${"d".repeat(64)}, 1,
         value - interval '200 hours', value - interval '32 hours', value + interval '136 hours'
       from now_value`;
-    const beforeDue = await lifecycleWorker`select * from public.claim_account_purge_cleanup(10, ${`boundary-before-${crypto.randomUUID()}`}, 60)`;
+    const beforeDue = await migrator`select * from public.claim_account_purge_cleanup(10, ${`boundary-before-${crypto.randomUUID()}`}, 60)`;
     expect(beforeDue.some((job) => job.owner_id === userId)).toBe(false);
     await migrator`with now_value as (select clock_timestamp() as value)
       update public.account_lifecycles set requested_at = value - interval '337 hours',
         cancel_until = value - interval '169 hours', purge_due_at = value - interval '1 hour'
       from now_value where user_id = ${userId}`;
-    const afterDue = await lifecycleWorker`select * from public.claim_account_purge_cleanup(10, ${`boundary-after-${crypto.randomUUID()}`}, 60)`;
+    const afterDue = await migrator`select * from public.claim_account_purge_cleanup(10, ${`boundary-after-${crypto.randomUUID()}`}, 60)`;
     expect(afterDue.some((job) => job.owner_id === userId)).toBe(true);
   });
 
@@ -273,7 +278,8 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
   it("keeps every export operations table private after reapplying role bootstrap", async () => {
     const bootstrap = await readFile(repoPath("packages/db/admin/bootstrap-migrator.sql"), "utf8");
     await migrator.unsafe(bootstrap);
-    const tables = ["data_export_requests", "data_export_object_cleanup_tasks", "data_export_cleanup_incidents"] as const;
+    const tables = ["data_export_requests", "data_export_object_cleanup_tasks", "data_export_cleanup_incidents",
+      "account_purge_operator_control"] as const;
     const privileges = await migrator<{ table_name: string; role_name: string;
       can_select: boolean; can_insert: boolean; can_update: boolean; can_delete: boolean }[]>`
       select table_name, role_name,
@@ -282,11 +288,11 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
         has_table_privilege(role_name, format('public.%I', table_name), 'UPDATE') as can_update,
         has_table_privilege(role_name, format('public.%I', table_name), 'DELETE') as can_delete
       from (values ('data_export_requests'), ('data_export_object_cleanup_tasks'),
-        ('data_export_cleanup_incidents')) as tables(table_name)
+        ('data_export_cleanup_incidents'), ('account_purge_operator_control')) as tables(table_name)
       cross join (values ('app'), ('lifecycle_worker')) as roles(role_name)
       order by table_name, role_name
     `;
-    expect(privileges).toHaveLength(6);
+    expect(privileges).toHaveLength(8);
     for (const row of privileges) {
       expect(row).toMatchObject({ can_select: false, can_insert: false, can_update: false, can_delete: false });
     }
@@ -294,7 +300,9 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
       for (const table of tables) {
         await expect(client.unsafe(`select * from public.${table}`)).rejects.toMatchObject({ code: "42501" });
         await expect(client.unsafe(`insert into public.${table} default values`)).rejects.toMatchObject({ code: "42501" });
-        await expect(client.unsafe(`update public.${table} set id = id where false`)).rejects.toMatchObject({ code: "42501" });
+        const identityColumn = table === "account_purge_operator_control" ? "singleton" : "id";
+        await expect(client.unsafe(`update public.${table} set ${identityColumn} = ${identityColumn} where false`))
+          .rejects.toMatchObject({ code: "42501" });
         await expect(client.unsafe(`delete from public.${table} where false`)).rejects.toMatchObject({ code: "42501" });
       }
     }
@@ -463,7 +471,7 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     await expect(lifecycleWorker`delete from public."user" where id = ${firstOwner}`).rejects.toMatchObject({ code: "42501" });
 
     const firstLease = `purge-lease-${crypto.randomUUID()}`;
-    const claimed = await lifecycleWorker`select * from public.claim_account_purge_cleanup(10, ${firstLease}, 60)`;
+    const claimed = await migrator`select * from public.claim_account_purge_cleanup(10, ${firstLease}, 60)`;
     expect(claimed).toHaveLength(2);
     const firstJob = claimed.find((job) => job.owner_id === firstOwner)!;
     const secondJob = claimed.find((job) => job.owner_id === secondOwner)!;
@@ -472,7 +480,7 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
 
     // This is the database half of an R2 failure. The worker unit test injects
     // the failing R2 adapter and proves it calls this fenced retry instead of completion.
-    expect(await lifecycleWorker`select public.retry_account_purge_cleanup(${firstJob.task_id}, 2, ${firstLease}, 30) as accepted`)
+    expect(await migrator`select public.retry_account_purge_cleanup(${firstJob.task_id}, 2, ${firstLease}, 30) as accepted`)
       .toEqual([{ accepted: true }]);
     const [failed] = await migrator`select state, last_error_category from public.account_lifecycles where user_id = ${firstOwner}`;
     expect(failed).toEqual({ state: "purge_failed", last_error_category: "storage" });
@@ -480,18 +488,18 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     await migrator`update public.account_purge_object_cleanup_tasks set next_attempt_at = clock_timestamp() - interval '1 second' where user_id = ${firstOwner}`;
 
     const retryLease = `purge-retry-${crypto.randomUUID()}`;
-    const [retried] = await lifecycleWorker`select * from public.claim_account_purge_cleanup(1, ${retryLease}, 60)`;
+    const [retried] = await migrator`select * from public.claim_account_purge_cleanup(1, ${retryLease}, 60)`;
     expect(retried.owner_id).toBe(firstOwner);
-    expect(await lifecycleWorker`select public.complete_account_purge_cleanup(${retried.task_id}, 2, ${retryLease}) as completed`)
+    expect(await migrator`select public.complete_account_purge_cleanup(${retried.task_id}, 2, ${retryLease}) as completed`)
       .toEqual([{ completed: true }]);
     // Completing a non-final object is accepted and fenced correctly. It must
     // not misreport a completed R2 deletion merely because finalization waits.
     const [firstStillPresent] = await migrator`select exists(select 1 from public."user" where id = ${firstOwner}) as present`;
     expect(firstStillPresent?.present).toBe(true);
     const finalLease = `purge-final-${crypto.randomUUID()}`;
-    const [finalJob] = await lifecycleWorker`select * from public.claim_account_purge_cleanup(1, ${finalLease}, 60)`;
+    const [finalJob] = await migrator`select * from public.claim_account_purge_cleanup(1, ${finalLease}, 60)`;
     expect(finalJob.owner_id).toBe(firstOwner);
-    expect(await lifecycleWorker`select public.complete_account_purge_cleanup(${finalJob.task_id}, 2, ${finalLease}) as completed`)
+    expect(await migrator`select public.complete_account_purge_cleanup(${finalJob.task_id}, 2, ${finalLease}) as completed`)
       .toEqual([{ completed: true }]);
     const [firstGone] = await migrator`select exists(select 1 from public."user" where id = ${firstOwner}) as present`;
     const [secondPresent] = await migrator`select exists(select 1 from public."user" where id = ${secondOwner}) as present`;
@@ -501,6 +509,62 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     expect(secondPresent?.present).toBe(true);
     expect(postGone?.present).toBe(false);
     expect(receipt).toEqual({ request_id: firstRequest, completed_stage_count: 7 });
+  });
+
+  it("fences a leased purge on pause and recovers it only after an explicit short resume", async () => {
+    const owner = await createUser("purge-operator-pause");
+    const reservation = `purge-operator-reservation-${crypto.randomUUID()}`;
+    await migrator`insert into public.media_reservation
+      (id, owner_id, object_key, content_type, byte_size, status, validated_at, expires_at)
+      values (${reservation}, ${owner}, ${`media/${owner}/${reservation}`}, 'image/jpeg', 1,
+        'validated', clock_timestamp(), '2090-01-01T00:00:00Z')`;
+    await migrator`insert into public.account_lifecycles
+      (user_id, state, request_id, idempotency_key_digest, generation, requested_at, cancel_until, purge_due_at)
+      values (${owner}, 'pending_deletion', ${crypto.randomUUID()}, ${"9".repeat(64)}, 1,
+        '2025-01-01T00:00:00Z', '2025-01-08T00:00:00Z', '2025-01-15T00:00:00Z')`;
+
+    const firstLease = `operator-lease-${crypto.randomUUID()}`;
+    const [job] = await migrator`select * from public.claim_account_purge_cleanup(1, ${firstLease}, 60)`;
+    expect(job.owner_id).toBe(owner);
+    expect(await migrator`select public.authorize_account_purge_cleanup(
+      ${job.task_id}, 1, ${firstLease}) as authorized`).toEqual([{ authorized: true }]);
+    expect(await migrator`select public.set_account_purge_operator_pause(
+      true, null, 'incident pause', 'integration operator') as paused`).toEqual([{ paused: true }]);
+    expect(await migrator`select public.authorize_account_purge_cleanup(
+      ${job.task_id}, 1, ${firstLease}) as authorized`).toEqual([{ authorized: false }]);
+    expect(await migrator`select public.complete_account_purge_cleanup(
+      ${job.task_id}, 1, ${firstLease}) as completed`).toEqual([{ completed: false }]);
+    expect(await migrator`select * from public.claim_account_purge_cleanup(
+      1, ${crypto.randomUUID()}, 60)`).toEqual([]);
+
+    await migrator`select public.set_account_purge_operator_pause(false,
+      clock_timestamp() + interval '5 minutes', 'reviewed recovery', 'integration operator')`;
+    const recoveryLease = `operator-recovery-${crypto.randomUUID()}`;
+    const [recovered] = await migrator`select * from public.claim_account_purge_cleanup(1, ${recoveryLease}, 60)`;
+    expect(recovered.owner_id).toBe(owner);
+    await migrator`update public.account_purge_object_cleanup_tasks set attempt_count = 8
+      where id = ${recovered.task_id}`;
+    expect(await migrator`select public.retry_account_purge_cleanup(
+      ${recovered.task_id}, 1, ${recoveryLease}, 30) as accepted`).toEqual([{ accepted: true }]);
+    const [aggregate] = await lifecycleWorker`select * from public.report_account_purge_cleanup()`;
+    const [operatorReport] = await lifecycleWorker`select * from public.report_account_purge_operator_control()`;
+    expect(Number(aggregate.terminal_failed_count)).toBeGreaterThanOrEqual(1);
+    expect(Number(operatorReport.terminal_cleanup_count)).toBeGreaterThanOrEqual(1);
+  });
+
+  it("keeps the lifecycle worker report-only and fails closed when operator state is missing", async () => {
+    for (const call of [
+      "select * from public.claim_account_purge_cleanup(1, 'forbidden', 60)",
+      "select public.authorize_account_purge_cleanup('forbidden', 1, 'forbidden')",
+      "select public.complete_account_purge_cleanup('forbidden', 1, 'forbidden')",
+      "select public.retry_account_purge_cleanup('forbidden', 1, 'forbidden', 30)",
+      "select public.delete_expired_account_purge_receipts(1)",
+    ]) await expect(lifecycleWorker.unsafe(call)).rejects.toMatchObject({ code: "42501" });
+
+    await migrator`delete from public.account_purge_operator_control`;
+    const [report] = await lifecycleWorker`select * from public.report_account_purge_operator_control()`;
+    expect(report).toMatchObject({ paused: true, control_fresh: false });
+    await migrator`insert into public.account_purge_operator_control (singleton) values (true)`;
   });
 
   it("retains export cleanup metadata after account finalization for late multipart recovery", async () => {
@@ -519,9 +583,9 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
       values (${owner}, 'pending_deletion', ${`purge-export-lifecycle-${crypto.randomUUID()}`}, ${"b".repeat(64)}, 1,
         '2025-01-01T00:00:00.000Z', '2025-01-08T00:00:00.000Z', '2025-01-15T00:00:00.000Z')`;
     const lease = `purge-export-lease-${crypto.randomUUID()}`;
-    const [job] = await lifecycleWorker`select * from public.claim_account_purge_cleanup(1, ${lease}, 60)`;
+    const [job] = await migrator`select * from public.claim_account_purge_cleanup(1, ${lease}, 60)`;
     expect(job.export_cleanup_task_id).toBe(taskId);
-    expect(await lifecycleWorker`select public.complete_account_purge_cleanup(${job.task_id}, 1, ${lease}) as completed`)
+    expect(await migrator`select public.complete_account_purge_cleanup(${job.task_id}, 1, ${lease}) as completed`)
       .toEqual([{ completed: true }]);
     const [ownerPresent] = await migrator`select exists(select 1 from public."user" where id = ${owner}) as present`;
     const [recoveryTask] = await migrator`select status, verified_absent_at is null as unreconciled
@@ -563,13 +627,13 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
         ${"a".repeat(64)}, 'Retained until both participants are gone', clock_timestamp())`;
 
     const lease = `purge-conversation-lease-${crypto.randomUUID()}`;
-    const claimed = await lifecycleWorker`select * from public.claim_account_purge_cleanup(10, ${lease}, 60)`;
+    const claimed = await migrator`select * from public.claim_account_purge_cleanup(10, ${lease}, 60)`;
     const firstJob = claimed.find((job) => job.owner_id === firstOwner)!;
     const secondJob = claimed.find((job) => job.owner_id === secondOwner)!;
-    const secondWorker = postgres(lifecycleWorkerConnection, { max: 1, prepare: false, onnotice: () => undefined });
+    const secondWorker = postgres(migratorConnection, { max: 1, prepare: false, onnotice: () => undefined });
     try {
       const [firstCompletion, secondCompletion] = await Promise.all([
-        lifecycleWorker`select public.complete_account_purge_cleanup(${firstJob.task_id}, 1, ${lease}) as completed`,
+        migrator`select public.complete_account_purge_cleanup(${firstJob.task_id}, 1, ${lease}) as completed`,
         secondWorker`select public.complete_account_purge_cleanup(${secondJob.task_id}, 1, ${lease}) as completed`,
       ]);
       expect(firstCompletion).toEqual([{ completed: true }]);
@@ -591,7 +655,7 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
       values (${requestId}, ${"f".repeat(64)}, clock_timestamp() - interval '11000 hours',
         clock_timestamp() - interval '10000 hours', clock_timestamp() - interval '9280 hours', 7)`;
     await expect(app`select public.delete_expired_account_purge_receipts(1)`).rejects.toMatchObject({ code: "42501" });
-    expect(await lifecycleWorker`select public.delete_expired_account_purge_receipts(1) as deleted`)
+    expect(await migrator`select public.delete_expired_account_purge_receipts(1) as deleted`)
       .toEqual([{ deleted: 1 }]);
     const [present] = await migrator`select exists(select 1 from public.account_purge_receipts where request_id = ${requestId}) as present`;
     expect(present?.present).toBe(false);
