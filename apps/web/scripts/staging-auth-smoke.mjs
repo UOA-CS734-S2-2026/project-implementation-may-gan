@@ -90,9 +90,10 @@ export function createSafeReporter(write = (line) => process.stdout.write(`${lin
       ].includes(destination) ? destination : "unknown"}`);
       if (phase === "login_failure" && progress) {
         fields.push(`submit_state=${["pending", "idle"].includes(progress.submitState) ? progress.submitState : "unknown"}`);
-        for (const [field, value] of [["session_get", progress.sessionGet], ["session_refresh", progress.sessionRefresh], ["profile_get", progress.profileGet]]) {
+        for (const [field, value] of [["session_get", progress.sessionGet], ["session_refresh", progress.sessionRefresh], ["profile_get", progress.profileGet], ["settings_response", progress.settingsResponse]]) {
           fields.push(`${field}=${["no_request", "no_response", "success", "unauthorized", "rate_limited", "http_error"].includes(value) ? value : "unknown"}`);
         }
+        fields.push(`settings_request=${["none", "document", "fetch", "other"].includes(progress.settingsRequest) ? progress.settingsRequest : "unknown"}`);
       }
     }
     write(fields.join(" "));
@@ -173,19 +174,39 @@ function authRequestKind(request) {
   return null;
 }
 
+function isSettingsRequest(request) {
+  try {
+    const url = new URL(request.url());
+    return url.origin === STAGING_ORIGIN && url.pathname === "/settings"
+      && url.searchParams.get("smoke") === "auth" && request.method() === "GET";
+  } catch { return false; }
+}
+
+function settingsRequestKind(request) {
+  if (request.isNavigationRequest()) return "document";
+  if (request.resourceType() === "fetch") return "fetch";
+  return "other";
+}
+
 function observeSignIn(page) {
   const observation = {
     requested: false,
     status: null,
     authRequests: Object.fromEntries(["session_get", "session_refresh", "profile_get"].map((kind) => [kind, { requested: false, status: null }])),
+    settingsRequest: { kind: "none", requested: false, status: null },
   };
   page.on("request", (request) => {
     if (isTrustedSignInRequest(request)) observation.requested = true;
+    if (isSettingsRequest(request)) {
+      observation.settingsRequest.kind = settingsRequestKind(request);
+      observation.settingsRequest.requested = true;
+    }
     const kind = authRequestKind(request);
     if (kind) observation.authRequests[kind].requested = true;
   });
   page.on("response", (response) => {
     if (isTrustedSignInRequest(response.request())) observation.status = response.status();
+    if (isSettingsRequest(response.request())) observation.settingsRequest.status = response.status();
     const kind = authRequestKind(response.request());
     if (kind) observation.authRequests[kind].status = response.status();
   });
@@ -253,6 +274,8 @@ async function defaultJourney({ context, page, unexpectedHost, journeyBaseline, 
       sessionGet: responseClass(signIn.authRequests.session_get),
       sessionRefresh: responseClass(signIn.authRequests.session_refresh),
       profileGet: responseClass(signIn.authRequests.profile_get),
+      settingsRequest: signIn.settingsRequest.kind,
+      settingsResponse: responseClass(signIn.settingsRequest),
     });
     if (unexpectedHost.count > journeyBaseline) throw failure("unexpected_host");
     let category;
