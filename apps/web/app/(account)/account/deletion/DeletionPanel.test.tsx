@@ -81,6 +81,40 @@ describe("account deletion owner flow", () => {
     expect(mocks.password).not.toHaveBeenCalled();
   });
 
+  it("recovers from a closed Google popup and permits a new verification attempt", async () => {
+    const first = { closed: false, location: { assign: vi.fn() }, close: vi.fn() };
+    const second = { closed: false, location: { assign: vi.fn() }, close: vi.fn() };
+    vi.spyOn(window, "open").mockReturnValueOnce(first as unknown as Window).mockReturnValueOnce(second as unknown as Window);
+    mocks.google.mockResolvedValue("https://accounts.google.test/authorize");
+    render(<DeletionPanel requestEnabled />);
+    await screen.findByText("Status: active");
+    fireEvent.click(screen.getByRole("checkbox"));
+    const verify = screen.getByRole("button", { name: "Verify with Google instead" });
+    fireEvent.click(verify);
+    await waitFor(() => expect(first.location.assign).toHaveBeenCalled());
+    first.closed = true;
+    await screen.findByText(/Google verification was closed/);
+    expect(verify).not.toBeDisabled();
+    fireEvent.click(verify);
+    await waitFor(() => expect(second.location.assign).toHaveBeenCalled());
+  });
+
+  it("recovers from a Google authorization setup error", async () => {
+    const first = { closed: false, location: { assign: vi.fn() }, close: vi.fn() };
+    const second = { closed: false, location: { assign: vi.fn() }, close: vi.fn() };
+    vi.spyOn(window, "open").mockReturnValueOnce(first as unknown as Window).mockReturnValueOnce(second as unknown as Window);
+    mocks.google.mockRejectedValueOnce(new Error("provider unavailable")).mockResolvedValueOnce("https://accounts.google.test/authorize");
+    render(<DeletionPanel requestEnabled />);
+    await screen.findByText("Status: active");
+    fireEvent.click(screen.getByRole("checkbox"));
+    const verify = screen.getByRole("button", { name: "Verify with Google instead" });
+    fireEvent.click(verify);
+    await screen.findByText(/Google verification is unavailable/);
+    expect(verify).not.toBeDisabled();
+    fireEvent.click(verify);
+    await waitFor(() => expect(second.location.assign).toHaveBeenCalled());
+  });
+
   it("uses the cancellation action only while the database-backed pending state is returned", async () => {
     mocks.status.mockResolvedValue({ ...active, state: "pending_deletion", cancelUntil: "2026-10-09T09:00:00.000Z" });
     mocks.password.mockResolvedValue("b".repeat(64));

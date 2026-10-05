@@ -33,7 +33,13 @@ export function DeletionPanel({ requestEnabled }: { requestEnabled: boolean }) {
   const [googleGrant, setGoogleGrant] = useState<GoogleGrant>();
   const [accepted, setAccepted] = useState<AcceptedOutcome>();
   const expectedGooglePopup = useRef<ExpectedGooglePopup | undefined>(undefined);
+  const popupMonitor = useRef<number | undefined>(undefined);
   const userId = user?.id;
+
+  const stopPopupMonitor = () => {
+    if (popupMonitor.current !== undefined) window.clearInterval(popupMonitor.current);
+    popupMonitor.current = undefined;
+  };
 
   const refresh = async () => {
     setError(undefined);
@@ -58,6 +64,7 @@ export function DeletionPanel({ requestEnabled }: { requestEnabled: boolean }) {
       const grant = event.data as { type?: unknown; action?: unknown; token?: unknown };
       if (grant.type !== "dayli.account-management-grant" || grant.action !== expected.action
         || typeof grant.token !== "string" || !/^[0-9a-f]{64}$/.test(grant.token)) return;
+      stopPopupMonitor();
       expectedGooglePopup.current = undefined;
       expected.popup.close();
       setGoogleGrant({ action: expected.action, token: grant.token });
@@ -67,6 +74,7 @@ export function DeletionPanel({ requestEnabled }: { requestEnabled: boolean }) {
     window.addEventListener("message", receive);
     return () => {
       window.removeEventListener("message", receive);
+      stopPopupMonitor();
       expectedGooglePopup.current?.popup.close();
       expectedGooglePopup.current = undefined;
     };
@@ -123,6 +131,7 @@ export function DeletionPanel({ requestEnabled }: { requestEnabled: boolean }) {
   };
   const startGoogle = async () => {
     if (busy || (!pending && (!requestEnabled || !confirmed))) return;
+    stopPopupMonitor();
     expectedGooglePopup.current?.popup.close();
     expectedGooglePopup.current = undefined;
     const popup = window.open("about:blank", popupName(), "popup,width=520,height=680");
@@ -131,10 +140,18 @@ export function DeletionPanel({ requestEnabled }: { requestEnabled: boolean }) {
       return;
     }
     expectedGooglePopup.current = { popup, action };
+    popupMonitor.current = window.setInterval(() => {
+      if (expectedGooglePopup.current?.popup !== popup || !popup.closed) return;
+      stopPopupMonitor();
+      expectedGooglePopup.current = undefined;
+      setBusy(false);
+      setError("Google verification was closed. Try again to open a new verification window.");
+    }, 250);
     setBusy(true);
     setError(undefined);
     try { popup.location.assign(await beginGoogleDeletionProof(action)); }
     catch {
+      stopPopupMonitor();
       expectedGooglePopup.current = undefined;
       popup.close();
       setError("Google verification is unavailable. Try another sign-in method or try again later.");
