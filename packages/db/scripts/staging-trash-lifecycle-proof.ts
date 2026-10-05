@@ -167,14 +167,17 @@ export async function requestProofRecord(
   return { response: result.response, body: requireProofRecordValue(diagnostic, result.body) };
 }
 
-async function createAccount(origin: string, marker: string, ordinal: number, diagnostic: ProtocolDiagnostic): Promise<string> {
-  const current = (await requestProofRecord(diagnostic, "legal_current", origin, "/api/v1/legal/current")).body;
+async function createAccount(origin: string, webOrigin: string, marker: string, ordinal: number,
+  diagnostic: ProtocolDiagnostic): Promise<string> {
+  const current = (await requestProofRecord(diagnostic, "legal_current", origin, "/api/v1/legal/current", {
+    headers: { origin: webOrigin },
+  })).body;
   if (current.status !== "effective" || typeof current.termsVersionId !== "string" ||
       typeof current.termsContentDigest !== "string" || !/^[a-f0-9]{64}$/.test(current.termsContentDigest)) {
     return failGuard(diagnostic, "invalid_response_contract");
   }
   const intent = (await requestProofRecord(diagnostic, "registration_intent", origin, "/api/v1/legal/registration-intent", {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+    method: "POST", headers: { "content-type": "application/json", origin: webOrigin }, body: JSON.stringify({
       flow: "email", termsVersionId: current.termsVersionId, termsContentDigest: current.termsContentDigest,
       acceptedTermsAndDeclaredAge16: true,
     }),
@@ -188,6 +191,7 @@ async function createAccount(origin: string, marker: string, ordinal: number, di
     method: "POST",
     headers: {
       "content-type": "application/json",
+      origin: webOrigin,
       "x-dayli-registration-intent": intent.token,
       "x-dayli-registration-binding": intent.binding,
     },
@@ -203,8 +207,9 @@ async function createAccount(origin: string, marker: string, ordinal: number, di
   return token;
 }
 
-async function createFixture(origin: string, token: string, marker: string, ordinal: number, diagnostic: ProtocolDiagnostic): Promise<Fixture> {
-  const authorization = { authorization: `Bearer ${token}` };
+async function createFixture(origin: string, webOrigin: string, token: string, marker: string, ordinal: number,
+  diagnostic: ProtocolDiagnostic): Promise<Fixture> {
+  const authorization = { authorization: `Bearer ${token}`, origin: webOrigin };
   const reservation = (await requestProofRecord(diagnostic, "media_reserve", origin, "/api/v1/media-reservations", {
     method: "POST", headers: { ...authorization, "content-type": "application/json" },
     body: JSON.stringify({ contentType: "image/jpeg", byteSize: jpeg.byteLength }),
@@ -263,10 +268,11 @@ async function createFixture(origin: string, token: string, marker: string, ordi
   return fixture;
 }
 
-async function trashFixture(origin: string, token: string, fixture: Fixture, diagnostic: ProtocolDiagnostic): Promise<void> {
+async function trashFixture(origin: string, webOrigin: string, token: string, fixture: Fixture,
+  diagnostic: ProtocolDiagnostic): Promise<void> {
   const trashed = (await requestProofRecord(diagnostic, "post_trash", origin,
     `/api/v1/posts/${encodeURIComponent(fixture.postId)}/trash`, {
-      method: "POST", headers: { authorization: `Bearer ${token}` },
+      method: "POST", headers: { authorization: `Bearer ${token}`, origin: webOrigin },
     })).body;
   if (typeof trashed.generation !== "number" || !Number.isSafeInteger(trashed.generation) || trashed.generation < 1) {
     return failGuard(diagnostic, "invalid_response_contract");
@@ -274,8 +280,9 @@ async function trashFixture(origin: string, token: string, fixture: Fixture, dia
   fixture.generation = trashed.generation;
 }
 
-async function proveAndRestore(origin: string, token: string, fixture: Fixture, diagnostic: ProtocolDiagnostic): Promise<void> {
-  const headers = { authorization: `Bearer ${token}` };
+async function proveAndRestore(origin: string, webOrigin: string, token: string, fixture: Fixture,
+  diagnostic: ProtocolDiagnostic): Promise<void> {
+  const headers = { authorization: `Bearer ${token}`, origin: webOrigin };
   await requestProofRecord(diagnostic, "post_hidden_read", origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}`, { headers }, 404);
   await requestProofRecord(diagnostic, "media_hidden_read", origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}/media/${encodeURIComponent(fixture.mediaId)}`, { headers }, 404);
   const list = (await requestProofRecord(diagnostic, "trash_list", origin, "/api/v1/posts/trash", { headers })).body;
@@ -427,21 +434,21 @@ async function run(): Promise<void> {
     evidence.phase = "migration_ledger";
     evidence.counts.migrations = await verifyMigrationLedger(sql);
     evidence.checks.migrationLedger = true;
-    const { apiOrigin: origin } = validateStagingOrigins({
+    const { apiOrigin: origin, webOrigin } = validateStagingOrigins({
       siteHost: required("STAGING_AUTH_SITE_HOST"),
       apiOrigin: required("STAGING_AUTH_API_ORIGIN"),
       webOrigin: required("STAGING_AUTH_WEB_ORIGIN"),
     });
     evidence.phase = "restore_fixture";
-    const restoreToken = await createAccount(origin, marker, 1, evidence.protocol);
-    const restoreFixture = await createFixture(origin, restoreToken, marker, 1, evidence.protocol);
-    await trashFixture(origin, restoreToken, restoreFixture, evidence.protocol);
-    await proveAndRestore(origin, restoreToken, restoreFixture, evidence.protocol);
+    const restoreToken = await createAccount(origin, webOrigin, marker, 1, evidence.protocol);
+    const restoreFixture = await createFixture(origin, webOrigin, restoreToken, marker, 1, evidence.protocol);
+    await trashFixture(origin, webOrigin, restoreToken, restoreFixture, evidence.protocol);
+    await proveAndRestore(origin, webOrigin, restoreToken, restoreFixture, evidence.protocol);
     evidence.checks.restore = true;
     evidence.phase = "purge_fixture";
-    const purgeToken = await createAccount(origin, marker, 2, evidence.protocol);
-    const purgeFixture = await createFixture(origin, purgeToken, marker, 2, evidence.protocol);
-    await trashFixture(origin, purgeToken, purgeFixture, evidence.protocol);
+    const purgeToken = await createAccount(origin, webOrigin, marker, 2, evidence.protocol);
+    const purgeFixture = await createFixture(origin, webOrigin, purgeToken, marker, 2, evidence.protocol);
+    await trashFixture(origin, webOrigin, purgeToken, purgeFixture, evidence.protocol);
     evidence.phase = "guarded_seed";
     purgeFixture.objectKey = await sql.begin((tx) => seedPastDeadline(tx, { ...purgeFixture, marker }));
     evidence.checks.guardedSeed = true;
