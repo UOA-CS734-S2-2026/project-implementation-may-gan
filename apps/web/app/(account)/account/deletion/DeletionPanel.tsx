@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { authClient } from "@/lib/auth/client";
 import { apiBaseUrl } from "@/lib/api/config";
 import { useSession } from "@/lib/session/hooks";
@@ -17,6 +17,11 @@ import {
 
 type AcceptedOutcome = "confirmed" | "unknown";
 type GoogleGrant = { action: DeletionAction; token: string };
+type ExpectedGooglePopup = { popup: Window; action: DeletionAction };
+
+function popupName(): string {
+  return `dayli-account-deletion-proof-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`;
+}
 
 export function DeletionPanel({ requestEnabled }: { requestEnabled: boolean }) {
   const { user, isPending } = useSession();
@@ -27,6 +32,7 @@ export function DeletionPanel({ requestEnabled }: { requestEnabled: boolean }) {
   const [password, setPassword] = useState("");
   const [googleGrant, setGoogleGrant] = useState<GoogleGrant>();
   const [accepted, setAccepted] = useState<AcceptedOutcome>();
+  const expectedGooglePopup = useRef<ExpectedGooglePopup | undefined>(undefined);
   const userId = user?.id;
 
   const refresh = async () => {
@@ -47,17 +53,23 @@ export function DeletionPanel({ requestEnabled }: { requestEnabled: boolean }) {
   useEffect(() => {
     const expectedOrigin = new URL(apiBaseUrl ?? window.location.origin).origin;
     const receive = (event: MessageEvent<unknown>) => {
-      if (event.origin !== expectedOrigin || !event.data || typeof event.data !== "object") return;
+      const expected = expectedGooglePopup.current;
+      if (event.origin !== expectedOrigin || event.source !== expected?.popup || !event.data || typeof event.data !== "object") return;
       const grant = event.data as { type?: unknown; action?: unknown; token?: unknown };
-      if (grant.type !== "dayli.account-management-grant"
-        || (grant.action !== "request_deletion" && grant.action !== "cancel_deletion")
+      if (grant.type !== "dayli.account-management-grant" || grant.action !== expected.action
         || typeof grant.token !== "string" || !/^[0-9a-f]{64}$/.test(grant.token)) return;
-      setGoogleGrant({ action: grant.action, token: grant.token });
+      expectedGooglePopup.current = undefined;
+      expected.popup.close();
+      setGoogleGrant({ action: expected.action, token: grant.token });
       setPassword("");
       setBusy(false);
     };
     window.addEventListener("message", receive);
-    return () => window.removeEventListener("message", receive);
+    return () => {
+      window.removeEventListener("message", receive);
+      expectedGooglePopup.current?.popup.close();
+      expectedGooglePopup.current = undefined;
+    };
   }, []);
 
   const finishAccepted = async (outcome: AcceptedOutcome) => {
@@ -87,6 +99,7 @@ export function DeletionPanel({ requestEnabled }: { requestEnabled: boolean }) {
     let requestSent = false;
     try {
       const token = usableGoogleGrant ?? await proveDeletionWithPassword(action, password);
+      if (usableGoogleGrant) setGoogleGrant(undefined);
       if (pending) {
         await cancelDeletion(token);
         setGoogleGrant(undefined);
@@ -110,15 +123,19 @@ export function DeletionPanel({ requestEnabled }: { requestEnabled: boolean }) {
   };
   const startGoogle = async () => {
     if (busy || (!pending && (!requestEnabled || !confirmed))) return;
-    const popup = window.open("about:blank", "dayli-account-deletion-proof", "popup,width=520,height=680");
+    expectedGooglePopup.current?.popup.close();
+    expectedGooglePopup.current = undefined;
+    const popup = window.open("about:blank", popupName(), "popup,width=520,height=680");
     if (!popup) {
       setError("Allow popups to verify with Google.");
       return;
     }
+    expectedGooglePopup.current = { popup, action };
     setBusy(true);
     setError(undefined);
     try { popup.location.assign(await beginGoogleDeletionProof(action)); }
     catch {
+      expectedGooglePopup.current = undefined;
       popup.close();
       setError("Google verification is unavailable. Try another sign-in method or try again later.");
       setBusy(false);

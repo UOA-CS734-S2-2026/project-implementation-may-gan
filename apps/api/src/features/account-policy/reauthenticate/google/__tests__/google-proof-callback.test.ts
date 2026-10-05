@@ -1,11 +1,13 @@
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { handleGoogleManagementCallback, isGoogleManagementCallback, type GoogleManagementCallbackDependencies } from "../google-proof-callback";
+import { createGoogleManagementState } from "../google-proof.repository";
 import { verifyGoogleManagementIdToken } from "../google-oidc";
 
 const now = new Date();
 const seconds = Math.floor(now.getTime() / 1_000);
-const state = `dayli-management-${"a".repeat(64)}`;
+const stateSecret = "test-only-google-state-secret-at-least-32-characters";
+let state = "";
 const nonce = "b".repeat(64);
 const subject = "linked-google-subject";
 let signingKey: Awaited<ReturnType<typeof generateKeyPair>>["privateKey"];
@@ -20,6 +22,7 @@ beforeAll(async () => {
   keys = createLocalJWKSet({ keys: [jwk] });
   nonceDigest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(nonce))),
     (byte) => byte.toString(16).padStart(2, "0")).join("");
+  state = await createGoogleManagementState("https://web.example.test", stateSecret);
 });
 
 async function signedToken(overrides: { subject?: string; authTime?: number; nonce?: string } = {}) {
@@ -35,7 +38,10 @@ function deps(idToken: string, session: { userId: string; sessionId: string } | 
     configuration: {
       clientId: "web-client-id", clientSecret: "test-only-google-client-secret-at-least-32-chars",
       redirectUri: "https://api.example.test/api/auth/callback/google",
+      completionOrigin: "https://web.example.test",
+      stateSecret,
     },
+    trustedOrigins: ["https://api.example.test", "https://web.example.test"],
     resolveSession: vi.fn(async () => session),
     claim: vi.fn(async (input) => input.userId === "owner" && input.sessionId === "original-session" ? {
       stateDigest: "c".repeat(64), action: "request_deletion" as const, nonceDigest,
@@ -63,11 +69,27 @@ describe("isolated Google management callback", () => {
     const body = await result.text();
     expect(body).toContain('type":"dayli.account-management-grant"');
     expect(body).toContain(`token":"${"d".repeat(64)}"`);
-    expect(body).toContain("postMessage(grant,window.location.origin)");
+    expect(body).toContain('postMessage(grant,"https://web.example.test")');
     expect(body).not.toContain('postMessage(grant,"*")');
     expect(result.url).not.toContain("token=");
     expect(configured.claim).toHaveBeenCalledWith({ state, userId: "owner", sessionId: "original-session" });
     expect(configured.complete).toHaveBeenCalledWith({ userId: "owner", sessionId: "original-session", action: "request_deletion", stateDigest: "c".repeat(64), verifiedSubject: subject });
+  });
+
+  it("supports proxy mode when the callback and intent-bound opener share the web origin", async () => {
+    const configured = deps(await signedToken());
+    const result = await handleGoogleManagementCallback(new Request(
+      `https://web.example.test/api/auth/callback/google?state=${encodeURIComponent(state)}&code=one-use-code`,
+    ), configured);
+    expect(result.status).toBe(200);
+    expect(await result.text()).toContain('postMessage(grant,"https://web.example.test")');
+  });
+
+  it("rejects a state whose signed completion origin is not trusted", async () => {
+    const configured = deps(await signedToken());
+    const untrustedState = await createGoogleManagementState("https://attacker.test", stateSecret);
+    expect((await handleGoogleManagementCallback(callback(untrustedState), configured)).status).toBe(400);
+    expect(configured.claim).not.toHaveBeenCalled();
   });
 
   it("requires the original session and a claimable one-use state", async () => {

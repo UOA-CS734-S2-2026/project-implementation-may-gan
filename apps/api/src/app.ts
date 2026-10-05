@@ -568,16 +568,19 @@ export function createAppForEnv(env: ApiEnv) {
   } satisfies PasswordReauthenticationDependencies : undefined;
   const googleManagementProof = configuration?.google ? {
     resolveSession: createSessionResolver(configuration),
-    begin: (input: Omit<Parameters<typeof beginGoogleManagementIntent>[1], "configuration">) => withHyperdriveDatabase(
-      configuration.hyperdrive, (database) => beginGoogleManagementIntent(database, {
+    begin: (input: { userId: string; sessionId: string; action: "request_deletion" | "cancel_deletion"; completionOrigin: string }) => {
+      if (!configuration.trustedOrigins.includes(input.completionOrigin)) return Promise.resolve(null);
+      return withHyperdriveDatabase(configuration.hyperdrive, (database) => beginGoogleManagementIntent(database, {
         ...input,
         configuration: {
           clientId: configuration.google!.clientIds[0],
           clientSecret: configuration.google!.clientSecret,
           redirectUri: new URL("/api/auth/callback/google", configuration.baseURL).href,
+          completionOrigin: input.completionOrigin,
+          stateSecret: configuration.secret,
         },
-      }),
-    ),
+      }));
+    },
   } satisfies GoogleManagementProofDependencies : undefined;
   const legalAcceptance = configuration ? {
     resolveSession: createSessionResolver(configuration),

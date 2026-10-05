@@ -144,7 +144,7 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
       method: "POST",
       headers: { authorization: `Bearer ${bearerToken}`, "content-type": "application/json" },
       body: JSON.stringify({ action: "request_deletion" }),
-    }));
+    }, "https://web.example.test"));
     expect(started.status).toBe(200);
     const { authorizationUrl } = await started.json() as { authorizationUrl: string };
     const url = new URL(authorizationUrl);
@@ -185,6 +185,7 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
       const proof = await response.text();
       expect(proof).toContain('type":"dayli.account-management-grant"');
       expect(proof).toContain('action":"request_deletion"');
+      expect(proof).toContain('postMessage(grant,"https://web.example.test")');
       expect(proof).toMatch(/token":"[0-9a-f]{64}"/);
       expect(response.url).not.toContain("token=");
       expect((await callback()).status).toBe(401);

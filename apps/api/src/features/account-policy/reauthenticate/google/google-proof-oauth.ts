@@ -1,7 +1,7 @@
 const encoder = new TextEncoder();
 const authorizationEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
 const tokenEndpoint = "https://oauth2.googleapis.com/token";
-const managementStatePattern = /^dayli-management-[0-9a-f]{64}$/;
+const managementStatePattern = /^dayli-management-[0-9a-f]{64}\.[A-Za-z0-9_-]{1,512}\.[0-9a-f]{64}$/;
 
 function base64url(bytes: Uint8Array): string {
   let binary = "";

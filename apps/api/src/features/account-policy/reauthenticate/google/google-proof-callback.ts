@@ -1,9 +1,7 @@
 import type { AccountManagementAction } from "../password/password.repository";
 import { exchangeGoogleManagementCode } from "./google-proof-oauth";
 import { verifyGoogleManagementIdToken } from "./google-oidc";
-import type { GoogleProofConfiguration } from "./google-proof.repository";
-
-const managementStatePattern = /^dayli-management-[0-9a-f]{64}$/;
+import { googleManagementCompletionOrigin, type GoogleProofConfiguration } from "./google-proof.repository";
 const headers = {
   "Cache-Control": "no-store",
   "Referrer-Policy": "no-referrer",
@@ -13,6 +11,7 @@ const headers = {
 
 export interface GoogleManagementCallbackDependencies {
   configuration: GoogleProofConfiguration;
+  trustedOrigins: readonly string[];
   resolveSession: (request: Request) => Promise<{ userId: string; sessionId: string } | null>;
   claim: (input: { state: string; userId: string; sessionId: string }) => Promise<{
     stateDigest: string;
@@ -35,12 +34,13 @@ function failure(status: number): Response {
 
 /**
  * The single-use grant never enters a URL. A popup can deliver it only to its
- * opener, which verifies the callback origin before using the action-bound
- * grant. A same-tab fallback deliberately exposes no token to the document.
+ * opener at the signed, intent-bound trusted origin. The opener verifies the
+ * callback origin before using the action-bound grant. A same-tab fallback
+ * deliberately exposes no token to the document.
  */
-function success(action: AccountManagementAction, token: string): Response {
+function success(action: AccountManagementAction, token: string, completionOrigin: string): Response {
   const payload = JSON.stringify({ type: "dayli.account-management-grant", action, token });
-  const body = `<!doctype html><meta charset="utf-8"><title>Google verification complete</title><script>const grant=${payload};if(window.opener){window.opener.postMessage(grant,window.location.origin);window.close()}else{document.body.textContent="Google verification complete. Return to Dayli to continue."}</script>`;
+  const body = `<!doctype html><meta charset="utf-8"><title>Google verification complete</title><script>const grant=${payload};if(window.opener){window.opener.postMessage(grant,${JSON.stringify(completionOrigin)});window.close()}else{document.body.textContent="Google verification complete. Return to Dayli to continue."}</script>`;
   return new Response(body, { status: 200, headers: { ...headers, "Content-Type": "text/html; charset=utf-8" } });
 }
 
@@ -49,8 +49,10 @@ export async function handleGoogleManagementCallback(request: Request, deps: Goo
   const query = new URL(request.url).searchParams;
   const state = query.get("state");
   const code = query.get("code");
-  if (!state || !managementStatePattern.test(state) || !code || code.length > 2048 || /\s/.test(code)
+  if (!state || !code || code.length > 2048 || /\s/.test(code)
     || query.getAll("state").length !== 1 || query.getAll("code").length !== 1 || query.has("error")) return failure(400);
+  const completionOrigin = await googleManagementCompletionOrigin(state, deps.configuration.stateSecret);
+  if (!completionOrigin || !deps.trustedOrigins.includes(completionOrigin)) return failure(400);
   let actor: Awaited<ReturnType<typeof deps.resolveSession>>;
   try { actor = await deps.resolveSession(request); } catch { return failure(503); }
   if (!actor?.userId || !actor.sessionId) return failure(401);
@@ -73,7 +75,7 @@ export async function handleGoogleManagementCallback(request: Request, deps: Goo
   } catch { return failure(401); }
   try {
     const grant = await deps.complete({ ...actor, action: intent.action, stateDigest: intent.stateDigest, verifiedSubject: proof.subject });
-    return grant ? success(intent.action, grant.token) : failure(409);
+    return grant ? success(intent.action, grant.token, completionOrigin) : failure(409);
   } catch { return failure(503); }
 }
 

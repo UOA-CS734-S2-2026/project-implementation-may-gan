@@ -9,7 +9,7 @@ import type { AccountManagementAction } from "../password/password.repository";
 export interface GoogleManagementProofDependencies {
   resolveSession: ResolveSession;
   rateLimiter?: ActorRateLimiter;
-  begin?: (input: { userId: string; sessionId: string; action: AccountManagementAction }) => Promise<{ url: string; expiresAt: Date } | null>;
+  begin?: (input: { userId: string; sessionId: string; action: AccountManagementAction; completionOrigin: string }) => Promise<{ url: string; expiresAt: Date } | null>;
 }
 
 const path = "/api/v1/account/reauthenticate/google";
@@ -43,8 +43,10 @@ export function registerGoogleManagementProofRoute(app: OpenAPIHono<Authenticate
     const limit = await deps.rateLimiter.check(context.req.raw, actor);
     if (limit === "unavailable") return unavailableResponse(context);
     if (limit !== "allowed") return rateLimitedResponse(context);
+    const completionOrigin = context.req.header("origin");
+    if (!completionOrigin) return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Google verification is unavailable.");
     try {
-      const intent = await deps.begin({ ...input.data, userId: actor.userId, sessionId: actor.sessionId });
+      const intent = await deps.begin({ ...input.data, userId: actor.userId, sessionId: actor.sessionId, completionOrigin });
       return intent
         ? context.json({ authorizationUrl: intent.url, expiresAt: intent.expiresAt.toISOString() }, 200)
         : apiErrorResponse(context, 409, "CONFLICT", "A linked Google account or eligible session is required.");

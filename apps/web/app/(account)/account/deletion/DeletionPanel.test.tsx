@@ -48,9 +48,10 @@ describe("account deletion owner flow", () => {
     expect(mocks.signOut).toHaveBeenCalledOnce();
   });
 
-  it("receives a popup Google grant only from the API origin and submits it after consent", async () => {
+  it("receives a one-shot Google grant only from the expected popup and API origin", async () => {
     const assign = vi.fn();
     const popup = { location: { assign }, close: vi.fn() };
+    const otherPopup = { location: { assign: vi.fn() }, close: vi.fn() };
     vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
     mocks.google.mockResolvedValue("https://accounts.google.test/authorize");
     mocks.request.mockResolvedValue(undefined);
@@ -59,14 +60,22 @@ describe("account deletion owner flow", () => {
     fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: "Verify with Google instead" }));
     await waitFor(() => expect(assign).toHaveBeenCalledWith("https://accounts.google.test/authorize"));
-    window.dispatchEvent(new MessageEvent("message", { origin: "https://attacker.test", data: {
+    expect(window.open).toHaveBeenCalledWith("about:blank", expect.stringMatching(/^dayli-account-deletion-proof-/), "popup,width=520,height=680");
+    window.dispatchEvent(new MessageEvent("message", { origin: "https://attacker.test", source: popup as unknown as MessageEventSource, data: {
       type: "dayli.account-management-grant", action: "request_deletion", token: "b".repeat(64),
     } }));
+    window.dispatchEvent(new MessageEvent("message", { origin: window.location.origin, source: otherPopup as unknown as MessageEventSource, data: {
+      type: "dayli.account-management-grant", action: "request_deletion", token: "b".repeat(64),
+    } }));
+    window.dispatchEvent(new MessageEvent("message", { origin: window.location.origin, source: popup as unknown as MessageEventSource, data: {
+      type: "dayli.account-management-grant", action: "cancel_deletion", token: "b".repeat(64),
+    } }));
     expect(screen.queryByText(/Google verification complete/)).not.toBeInTheDocument();
-    window.dispatchEvent(new MessageEvent("message", { origin: window.location.origin, data: {
+    window.dispatchEvent(new MessageEvent("message", { origin: window.location.origin, source: popup as unknown as MessageEventSource, data: {
       type: "dayli.account-management-grant", action: "request_deletion", token: "b".repeat(64),
     } }));
     await screen.findByText(/Google verification complete/);
+    expect(popup.close).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole("button", { name: "Request deletion" }));
     await waitFor(() => expect(mocks.request).toHaveBeenCalledWith("b".repeat(64), "idempotency-key-0001"));
     expect(mocks.password).not.toHaveBeenCalled();
