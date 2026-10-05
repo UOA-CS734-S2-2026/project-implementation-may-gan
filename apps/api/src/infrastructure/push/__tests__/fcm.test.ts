@@ -1,6 +1,6 @@
 import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import { buildFcmPayload, buildGenericFcmPayload, createFcmHttpV1Sender, normalizeFcmServiceAccount, type FcmDiagnostic } from "../fcm";
+import { buildFcmPayload, buildGenericFcmPayload, classifyFcmTransportFailure, createFcmHttpV1Sender, normalizeFcmServiceAccount, type FcmDiagnostic } from "../fcm";
 import { createPushOutboxHandler } from "../push-dispatcher";
 
 const job = { id: "push-job", eventId: "event", recipientId: "peer", conversationId: "conversation", changeSequence: "4", channel: "push" as const, deviceRegistrationId: "device", attempts: 1, leaseToken: "lease", leaseExpiresAt: new Date() };
@@ -113,13 +113,55 @@ describe("FCM HTTP v1 adapter", () => {
         onDiagnostic: (value) => diagnostics.push(value),
       });
       await expect(sender.send({ token: "private-device", eventId: "private-event", conversationId: "private-conversation" })).resolves.toMatchObject({ category: "transient" });
-      expect(diagnostics.at(-1)).toEqual({ stage: failStage, outcome: "transport_failed" });
+      expect(diagnostics.at(-1)).toEqual({ stage: failStage, outcome: "transport_failed", transportReason: "unknown" });
       const controller = new AbortController();
       controller.abort();
       await sender.send({ token: "private-device", eventId: "private-event", conversationId: "private-conversation" }, { signal: controller.signal });
       expect(diagnostics.at(-1)).toEqual({ stage: "oauth", outcome: "aborted" });
       expect(JSON.stringify(diagnostics)).not.toContain("private-");
     }
+  });
+
+  it.each([
+    [new Error("Network connection lost. private-device private-key"), "connection_lost"],
+    [{ code: "ECONNRESET", message: "private-body" }, "connection_lost"],
+    [{ code: "ECONNREFUSED" }, "connection_refused"],
+    [{ cause: { code: "ENOTFOUND", hostname: "private-host" } }, "dns_failure"],
+    [{ code: "EAI_AGAIN" }, "dns_failure"],
+    [{ cause: { code: "CERT_HAS_EXPIRED" } }, "tls_failure"],
+    [{ name: "TimeoutError", message: "private-token" }, "timeout"],
+    [{ code: "UND_ERR_CONNECT_TIMEOUT" }, "timeout"],
+    [new Error("Too many subrequests. private-event"), "subrequest_limit"],
+    [new Error("Cannot perform I/O on behalf of a different request. private-target"), "cross_request_io"],
+    [new TypeError("Illegal invocation private-assertion"), "invalid_invocation"],
+    [new Error("Redirect mode is error private-url"), "redirect_failed"],
+    [new Error("private-key unknown failure"), "unknown"],
+    ["private-exception", "unknown"],
+    [null, "unknown"],
+  ] as const)("classifies a transport failure into %s only", (error, expected) => {
+    const reason = classifyFcmTransportFailure(error);
+    expect(reason).toBe(expected);
+    expect(reason).not.toContain("private-");
+  });
+
+  it("handles unreadable error properties without emitting them", () => {
+    expect(classifyFcmTransportFailure({ get message() { throw new Error("private-getter"); } })).toBe("unknown");
+  });
+
+  it.each(["oauth", "fcm"] as const)("emits the safe connection-lost reason for %s", async (stage) => {
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const diagnostics: FcmDiagnostic[] = [];
+    const sender = createFcmHttpV1Sender({
+      serviceAccount: { clientEmail: "private-email", privateKey: privateKey.export({ type: "pkcs8", format: "pem" }).toString(), projectId: "private-project" },
+      fetch: vi.fn(async (url) => {
+        if (String(url).includes("oauth2") && stage === "fcm") return new Response(JSON.stringify({ access_token: "private-access-token", expires_in: 300 }));
+        throw new Error("Network connection lost. private-key private-device private-body");
+      }) as typeof fetch,
+      onDiagnostic: (value) => diagnostics.push(value),
+    });
+    await expect(sender.send({ token: "private-device", eventId: "private-event", conversationId: "private-conversation" })).resolves.toMatchObject({ ok: false, retryable: true, category: "transient" });
+    expect(diagnostics.at(-1)).toEqual({ stage, outcome: "transport_failed", transportReason: "connection_lost" });
+    expect(JSON.stringify(diagnostics)).not.toContain("private-");
   });
 
   it("does not turn successful delivery into a retry if the diagnostic sink throws", async () => {
