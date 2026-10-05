@@ -43,6 +43,9 @@ export const dataExportObjectCleanupStatus = pgEnum("data_export_object_cleanup_
 ]);
 
 export const purgeReceiptOutcome = pgEnum("purge_receipt_outcome", ["completed"]);
+export const accountPurgeObjectCleanupStatus = pgEnum("account_purge_object_cleanup_status", [
+  "pending", "deleting", "failed", "completed",
+]);
 
 export const operatorCaseType = pgEnum("operator_case_type", ["underage_report"]);
 export const operatorCaseStatus = pgEnum("operator_case_status", ["open", "reviewed", "restricted", "closed"]);
@@ -231,6 +234,39 @@ export const dataExportRequests = pgTable("data_export_requests", {
       ${table.readyAt} is null and ${table.expiresAt} is null and ${table.failureCategory} is null) or
     (${table.status} = 'expired' and ${table.snapshotCutoffAt} is null and ${table.archiveObjectKey} is null and
       ${table.readyAt} is null and ${table.expiresAt} is null and ${table.archiveCleanupTaskId} is not null and ${table.failureCategory} is null)
+  `),
+]);
+
+/** Private per-object R2 cleanup state. It is retained until final account
+ * deletion so retries cannot rediscover and re-delete a completed object. */
+export const accountPurgeObjectCleanupTasks = pgTable("account_purge_object_cleanup_tasks", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  objectKey: text("object_key").notNull(),
+  exportCleanupTaskId: text("export_cleanup_task_id").references(() => dataExportObjectCleanupTasks.id),
+  status: accountPurgeObjectCleanupStatus("status").notNull().default("pending"),
+  attemptCount: bigint("attempt_count", { mode: "number" }).notNull().default(0),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).defaultNow(),
+  leaseToken: text("lease_token"),
+  leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+  failureCategory: text("failure_category"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => [
+  unique("account_purge_object_cleanup_tasks_user_key_unique").on(table.userId, table.objectKey),
+  index("account_purge_object_cleanup_tasks_due_idx").on(table.status, table.nextAttemptAt),
+  index("account_purge_object_cleanup_tasks_lease_idx").on(table.status, table.leaseExpiresAt),
+  check("account_purge_object_cleanup_tasks_id_check", sql`char_length(${table.id}) between 1 and 200`),
+  check("account_purge_object_cleanup_tasks_key_check", sql`char_length(${table.objectKey}) between 1 and 1024`),
+  check("account_purge_object_cleanup_tasks_attempt_check", sql`${table.attemptCount} >= 0`),
+  check("account_purge_object_cleanup_tasks_failure_check", sql`${table.failureCategory} is null or char_length(${table.failureCategory}) between 1 and 100`),
+  check("account_purge_object_cleanup_tasks_lease_pair_check", sql`(${table.leaseToken} is null) = (${table.leaseExpiresAt} is null)`),
+  check("account_purge_object_cleanup_tasks_state_check", sql`
+    (${table.status} = 'pending' and ${table.leaseToken} is null and ${table.failureCategory} is null) or
+    (${table.status} = 'deleting' and ${table.leaseToken} is not null and ${table.nextAttemptAt} is null and ${table.failureCategory} is null) or
+    (${table.status} = 'failed' and ${table.leaseToken} is null and ${table.failureCategory} is not null) or
+    (${table.status} = 'completed' and ${table.leaseToken} is null and ${table.failureCategory} is null and ${table.completedAt} is not null)
   `),
 ]);
 

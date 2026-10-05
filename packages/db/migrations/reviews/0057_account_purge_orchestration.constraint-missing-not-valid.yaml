@@ -1,0 +1,6 @@
+reason: Both foreign keys are on a newly created, empty private table in the same atomic migration. There are no existing rows to scan or concurrent writes to validate.
+affected_data_and_clients: Adds only foreign keys from the new private cleanup task table to user and existing export cleanup task identifiers.
+rollout_sequence: Apply through the protected manual migration workflow before any report-only proof. No runtime is activated by this migration.
+backup_checkpoint: Confirm the required provider and PostgreSQL restore checkpoint before protected-environment execution.
+forward_fix_plan: Stop on failure and add a reviewed forward migration. Do not weaken the cleanup ownership constraints.
+reviewer: Required database CODEOWNER review and privacy-owner approval before protected migration execution.

@@ -1,0 +1,6 @@
+reason: Both indexes are created on the new, empty private cleanup task table inside the protected atomic migration. Concurrent index creation is incompatible with that transaction and provides no benefit before a writer exists.
+affected_data_and_clients: Creates due and lease indexes for future private cleanup claims. No existing table index is changed.
+rollout_sequence: Apply through the protected migration workflow before any report-only proof or future executor activation.
+backup_checkpoint: Confirm the required provider and PostgreSQL restore checkpoint before protected-environment execution.
+forward_fix_plan: Stop on failure and add a reviewed forward migration. Do not create a partially indexed cleanup authority.
+reviewer: Required database CODEOWNER review and privacy-owner approval before protected migration execution.

@@ -32,6 +32,7 @@ BEGIN
     'account_google_reauthentication_intents',
     'account_lifecycles',
     'account_management_grants',
+    'account_purge_object_cleanup_tasks',
     'account_notification_preferences',
     'account_purge_receipts',
     'age_declarations',
