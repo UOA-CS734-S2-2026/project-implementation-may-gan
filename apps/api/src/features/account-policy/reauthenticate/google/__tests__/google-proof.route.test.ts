@@ -4,8 +4,8 @@ import { resolveAccountPolicy, type AccountPolicyState } from "../../../shared/a
 import type { GoogleManagementProofDependencies } from "../google-proof.route";
 
 const url = "https://api.example.test/api/v1/account/reauthenticate/google";
-const request = (action: string) => new Request(url, {
-  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action }),
+const request = (action: string, origin = "https://web.example.test") => new Request(url, {
+  method: "POST", headers: { "content-type": "application/json", origin }, body: JSON.stringify({ action }),
 });
 
 function appFor(state?: Partial<AccountPolicyState>, begin: NonNullable<GoogleManagementProofDependencies["begin"]> = vi.fn(async () => ({
@@ -25,7 +25,9 @@ describe("session-bound Google management intent", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     await expect(response.json()).resolves.toEqual({ authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=safe", expiresAt: "2026-10-02T12:00:00.000Z" });
-    expect(begin).toHaveBeenCalledWith({ userId: "owner", sessionId: "original-session", action: "request_deletion" });
+    expect(begin).toHaveBeenCalledWith({
+      userId: "owner", sessionId: "original-session", action: "request_deletion", completionOrigin: "https://web.example.test",
+    });
   });
 
   it("allows only cancellation verification while deletion is pending", async () => {
@@ -41,6 +43,11 @@ describe("session-bound Google management intent", () => {
     const invalid = appFor();
     expect((await invalid.api.request(request("wrong"))).status).toBe(422);
     expect(invalid.begin).not.toHaveBeenCalled();
+    const missingOrigin = appFor();
+    expect((await missingOrigin.api.request(new Request(url, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "request_deletion" }),
+    }))).status).toBe(503);
+    expect(missingOrigin.begin).not.toHaveBeenCalled();
     const limited = appFor(undefined, undefined, "denied");
     expect((await limited.api.request(request("request_deletion"))).status).toBe(429);
     expect(limited.begin).not.toHaveBeenCalled();

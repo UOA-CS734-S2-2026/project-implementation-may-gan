@@ -1,11 +1,13 @@
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { handleGoogleManagementCallback, isGoogleManagementCallback, type GoogleManagementCallbackDependencies } from "../google-proof-callback";
+import { createGoogleManagementState } from "../google-proof.repository";
 import { verifyGoogleManagementIdToken } from "../google-oidc";
 
 const now = new Date();
 const seconds = Math.floor(now.getTime() / 1_000);
-const state = `dayli-management-${"a".repeat(64)}`;
+const stateSecret = "test-only-google-state-secret-at-least-32-characters";
+let state = "";
 const nonce = "b".repeat(64);
 const subject = "linked-google-subject";
 let signingKey: Awaited<ReturnType<typeof generateKeyPair>>["privateKey"];
@@ -20,6 +22,7 @@ beforeAll(async () => {
   keys = createLocalJWKSet({ keys: [jwk] });
   nonceDigest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(nonce))),
     (byte) => byte.toString(16).padStart(2, "0")).join("");
+  state = await createGoogleManagementState("https://web.example.test", stateSecret);
 });
 
 async function signedToken(overrides: { subject?: string; authTime?: number; nonce?: string } = {}) {
@@ -35,7 +38,10 @@ function deps(idToken: string, session: { userId: string; sessionId: string } | 
     configuration: {
       clientId: "web-client-id", clientSecret: "test-only-google-client-secret-at-least-32-chars",
       redirectUri: "https://api.example.test/api/auth/callback/google",
+      completionOrigin: "https://web.example.test",
+      stateSecret,
     },
+    trustedOrigins: ["https://api.example.test", "https://web.example.test"],
     resolveSession: vi.fn(async () => session),
     claim: vi.fn(async (input) => input.userId === "owner" && input.sessionId === "original-session" ? {
       stateDigest: "c".repeat(64), action: "request_deletion" as const, nonceDigest,
@@ -51,6 +57,16 @@ const callback = (stateValue = state, code = "one-use-code") => new Request(
   `https://api.example.test/api/auth/callback/google?state=${encodeURIComponent(stateValue)}&code=${encodeURIComponent(code)}`,
 );
 
+async function expectFailureHandoff(response: Response) {
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-type")).toContain("text/html");
+  const body = await response.text();
+  expect(body).toContain('type":"dayli.account-management-proof-failure"');
+  expect(body).toContain('action":"request_deletion"');
+  expect(body).toContain('postMessage(failure,"https://web.example.test")');
+  expect(body).not.toContain("token");
+}
+
 describe("isolated Google management callback", () => {
   it("exchanges and verifies the signed linked subject without invoking a login path", async () => {
     const configured = deps(await signedToken());
@@ -59,9 +75,45 @@ describe("isolated Google management callback", () => {
     expect(result.status).toBe(200);
     expect(result.headers.get("cache-control")).toBe("no-store");
     expect(result.headers.get("referrer-policy")).toBe("no-referrer");
-    await expect(result.json()).resolves.toEqual({ action: "request_deletion", token: "d".repeat(64), expiresAt: new Date(now.getTime() + 300_000).toISOString() });
+    expect(result.headers.get("content-type")).toContain("text/html");
+    const body = await result.text();
+    expect(body).toContain('type":"dayli.account-management-grant"');
+    expect(body).toContain(`token":"${"d".repeat(64)}"`);
+    expect(body).toContain('postMessage(grant,"https://web.example.test")');
+    expect(body).not.toContain('postMessage(grant,"*")');
+    expect(result.url).not.toContain("token=");
     expect(configured.claim).toHaveBeenCalledWith({ state, userId: "owner", sessionId: "original-session" });
     expect(configured.complete).toHaveBeenCalledWith({ userId: "owner", sessionId: "original-session", action: "request_deletion", stateDigest: "c".repeat(64), verifiedSubject: subject });
+  });
+
+  it("supports proxy mode when the callback and intent-bound opener share the web origin", async () => {
+    const configured = deps(await signedToken());
+    const result = await handleGoogleManagementCallback(new Request(
+      `https://web.example.test/api/auth/callback/google?state=${encodeURIComponent(state)}&code=one-use-code`,
+    ), configured);
+    expect(result.status).toBe(200);
+    expect(await result.text()).toContain('postMessage(grant,"https://web.example.test")');
+  });
+
+  it("rejects a state whose signed completion origin is not trusted", async () => {
+    const configured = deps(await signedToken());
+    const untrustedState = await createGoogleManagementState("https://attacker.test", stateSecret);
+    expect((await handleGoogleManagementCallback(callback(untrustedState), configured)).status).toBe(400);
+    expect(configured.claim).not.toHaveBeenCalled();
+  });
+
+  it("hands Google denial, invalid callback input, and provider failures back without a grant", async () => {
+    const denied = deps(await signedToken());
+    await expectFailureHandoff(await handleGoogleManagementCallback(new Request(
+      `https://api.example.test/api/auth/callback/google?state=${encodeURIComponent(state)}&error=access_denied`,
+    ), denied));
+    const invalidCode = deps(await signedToken());
+    await expectFailureHandoff(await handleGoogleManagementCallback(callback(state, "invalid code"), invalidCode));
+    const invalidNonce = deps(await signedToken({ nonce: "another-nonce" }));
+    await expectFailureHandoff(await handleGoogleManagementCallback(callback(), invalidNonce));
+    const unavailable = deps(await signedToken());
+    unavailable.exchange = vi.fn(async () => { throw new Error("provider unavailable"); });
+    await expectFailureHandoff(await handleGoogleManagementCallback(callback(), unavailable));
   });
 
   it("requires the original session and a claimable one-use state", async () => {
@@ -79,10 +131,10 @@ describe("isolated Google management callback", () => {
 
   it("never issues a grant for another Google subject or a stale authentication time", async () => {
     const swapped = deps(await signedToken({ subject: "another-google-account" }));
-    expect((await handleGoogleManagementCallback(callback(), swapped)).status).toBe(401);
+    await expectFailureHandoff(await handleGoogleManagementCallback(callback(), swapped));
     expect(swapped.complete).not.toHaveBeenCalled();
     const stale = deps(await signedToken({ authTime: seconds - 400 }));
-    expect((await handleGoogleManagementCallback(callback(), stale)).status).toBe(401);
+    await expectFailureHandoff(await handleGoogleManagementCallback(callback(), stale));
     expect(stale.complete).not.toHaveBeenCalled();
   });
 

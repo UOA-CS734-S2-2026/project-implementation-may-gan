@@ -199,7 +199,8 @@ import { authorizeExportDownload } from "./features/data-export/shared/export-do
 import { prepareExportDownload } from "./features/data-export/shared/export-download";
 import { createExportArchiveStore } from "./features/data-export/shared/export-r2-archive";
 import { readDeletionStatus } from "./features/account-lifecycle/shared/deletion-status.repository";
-import { cancelAccountDeletion } from "./features/account-lifecycle/shared/deletion-commands.repository";
+import { cancelAccountDeletion, requestAccountDeletion } from "./features/account-lifecycle/shared/deletion-commands.repository";
+import { readDeletionRequestActivation } from "./features/account-lifecycle/shared/deletion-activation";
 import { registerPasswordReauthenticationRoute, type PasswordReauthenticationDependencies } from "./features/account-policy/reauthenticate/password/password.route";
 import { issuePasswordManagementGrant } from "./features/account-policy/reauthenticate/password/password.repository";
 import { registerGoogleManagementProofRoute, type GoogleManagementProofDependencies } from "./features/account-policy/reauthenticate/google/google-proof.route";
@@ -522,14 +523,24 @@ export function createAppForEnv(env: ApiEnv) {
     resolveSession: createSessionResolver(configuration),
     policies: createHyperdriveAccountPolicyResolver(configuration.hyperdrive),
   } satisfies AccountPolicyDependencies : undefined;
+  const deletionActivation = configuration
+    ? readDeletionRequestActivation(env, configuration.publicApiBaseURL)
+    : { enabled: false as const };
   const deletion = configuration ? {
     resolveSession: createSessionResolver(configuration),
     status: (userId: string) => withHyperdriveDatabase(configuration.hyperdrive, (database) => readDeletionStatus(database, userId)),
     cancel: (input: Parameters<typeof cancelAccountDeletion>[1]) => withHyperdriveDatabase(
       configuration.hyperdrive, (database) => cancelAccountDeletion(database, input),
     ),
-    // Request execution stays unregistered until the synthetic-staging gate is reviewed.
+    // The repository command is deliberately not mounted yet. A one-shot DO
+    // call after commit cannot prove existing sockets were fenced if it fails.
+    // Keep this fail closed until the purge subsystem supplies durable retry,
+    // monitoring, and reconciliation evidence for realtime revocation.
     requestEnabled: false,
+    request: deletionActivation.enabled ? (input: Parameters<typeof requestAccountDeletion>[1]) => {
+      if (input.userId !== deletionActivation.allowedUserId) return Promise.resolve({ status: "conflict" as const });
+      return withHyperdriveDatabase(configuration.hyperdrive, (database) => requestAccountDeletion(database, input));
+    } : undefined,
   } satisfies DeletionRouteDependencies : undefined;
   const allStagingExports = stagingExportAllUsersEnabled(env);
   const stagingExportProof = allStagingExports ? null : readStagingExportProof(env);
@@ -557,16 +568,19 @@ export function createAppForEnv(env: ApiEnv) {
   } satisfies PasswordReauthenticationDependencies : undefined;
   const googleManagementProof = configuration?.google ? {
     resolveSession: createSessionResolver(configuration),
-    begin: (input: Omit<Parameters<typeof beginGoogleManagementIntent>[1], "configuration">) => withHyperdriveDatabase(
-      configuration.hyperdrive, (database) => beginGoogleManagementIntent(database, {
+    begin: (input: { userId: string; sessionId: string; action: "request_deletion" | "cancel_deletion"; completionOrigin: string }) => {
+      if (!configuration.trustedOrigins.includes(input.completionOrigin)) return Promise.resolve(null);
+      return withHyperdriveDatabase(configuration.hyperdrive, (database) => beginGoogleManagementIntent(database, {
         ...input,
         configuration: {
           clientId: configuration.google!.clientIds[0],
           clientSecret: configuration.google!.clientSecret,
           redirectUri: new URL("/api/auth/callback/google", configuration.baseURL).href,
+          completionOrigin: input.completionOrigin,
+          stateSecret: configuration.secret,
         },
-      }),
-    ),
+      }));
+    },
   } satisfies GoogleManagementProofDependencies : undefined;
   const legalAcceptance = configuration ? {
     resolveSession: createSessionResolver(configuration),

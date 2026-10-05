@@ -23,6 +23,7 @@ import '../posts/post_activity.dart';
 import '../posts/post_submitter.dart';
 import '../auth/biometric_service.dart';
 import '../profile/streak_cache.dart';
+import '../settings/account_deletion_client.dart';
 import '../settings/account_export_client.dart';
 import '../weather/weather_lookup.dart';
 
@@ -44,6 +45,7 @@ class AppServices {
     this.notificationConsent,
     this.notificationPreflight,
     this.accountExports,
+    this.accountDeletion,
     this.google,
     this.mediaPicker = const DeviceMediaPicker(),
     PendingCaptures? pendingCaptures,
@@ -86,6 +88,9 @@ class AppServices {
   final FirebasePushLifecycle? notifications;
   final NotificationConsentController? notificationConsent;
   final NotificationPreflight? notificationPreflight;
+
+  /// Null until the protected staging deletion activation is complete.
+  final AccountDeletionClient? accountDeletion;
 
   /// Null until export provider proof and an explicit release decision.
   final AccountExportClient? accountExports;

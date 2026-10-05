@@ -144,7 +144,7 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
       method: "POST",
       headers: { authorization: `Bearer ${bearerToken}`, "content-type": "application/json" },
       body: JSON.stringify({ action: "request_deletion" }),
-    }));
+    }, "https://web.example.test"));
     expect(started.status).toBe(200);
     const { authorizationUrl } = await started.json() as { authorizationUrl: string };
     const url = new URL(authorizationUrl);
@@ -181,8 +181,13 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
       const response = await callback();
       expect(response.status).toBe(200);
       expect(response.headers.get("cache-control")).toBe("no-store");
-      const proof = await response.json() as { token: string; action: string };
-      expect(proof).toMatchObject({ token: expect.stringMatching(/^[0-9a-f]{64}$/), action: "request_deletion" });
+      expect(response.headers.get("content-type")).toContain("text/html");
+      const proof = await response.text();
+      expect(proof).toContain('type":"dayli.account-management-grant"');
+      expect(proof).toContain('action":"request_deletion"');
+      expect(proof).toContain('postMessage(grant,"https://web.example.test")');
+      expect(proof).toMatch(/token":"[0-9a-f]{64}"/);
+      expect(response.url).not.toContain("token=");
       expect((await callback()).status).toBe(401);
       expect(await migrator.db.select().from(schema.session)).toHaveLength(1);
       expect(await migrator.db.select().from(schema.account)).toHaveLength(2);

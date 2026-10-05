@@ -1,13 +1,21 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { exchangeGoogleManagementCode, googleManagementAuthorizationUrl } from "../google-proof-oauth";
+import { createGoogleManagementState } from "../google-proof.repository";
 
-const input = {
-  state: `dayli-management-${"a".repeat(64)}`,
+const inputWithoutState = {
   nonce: "b".repeat(64),
   clientId: "web-client-id",
   clientSecret: "server-only-test-secret-at-least-32-characters",
   redirectUri: "https://api.example.test/api/auth/callback/google",
 };
+let input!: typeof inputWithoutState & { state: string };
+
+beforeAll(async () => {
+  input = {
+    ...inputWithoutState,
+    state: await createGoogleManagementState("https://web.example.test", inputWithoutState.clientSecret),
+  };
+});
 
 async function expectedChallenge(verifier: string) {
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
@@ -49,7 +57,10 @@ describe("dedicated Google management OAuth exchange", () => {
     expect(body.get("grant_type")).toBe("authorization_code");
     const url = new URL(await googleManagementAuthorizationUrl(input));
     expect(await expectedChallenge(body.get("code_verifier")!)).toBe(url.searchParams.get("code_challenge"));
-    const different = new URL(await googleManagementAuthorizationUrl({ ...input, state: `dayli-management-${"c".repeat(64)}` }));
+    const different = new URL(await googleManagementAuthorizationUrl({
+      ...input,
+      state: await createGoogleManagementState("https://web.example.test", input.clientSecret),
+    }));
     expect(different.searchParams.get("code_challenge")).not.toBe(url.searchParams.get("code_challenge"));
   });
 

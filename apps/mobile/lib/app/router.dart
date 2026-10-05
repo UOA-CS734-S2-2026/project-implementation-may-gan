@@ -19,6 +19,7 @@ import '../messaging/new_message_screen.dart';
 import '../posts/post_detail_screen.dart';
 import '../profile/edit_profile_screen.dart';
 import '../profile/my_days_screen.dart';
+import '../settings/account_deletion_screen.dart';
 import '../settings/account_export_screen.dart';
 import '../settings/settings_screen.dart';
 import '../settings/trash_screen.dart';
@@ -120,8 +121,13 @@ GoRouter buildRouter(
           if (location == '/account/export') return null;
           return '/legal/acceptance';
         case SessionStatus.needsUsernameSetup:
-          if (location == '/account/export') return null;
-          if (location == '/setup-username') return null;
+          if (location == '/account/export' ||
+              location == '/account/deletion') {
+            return null;
+          }
+          if (location == '/setup-username') {
+            return null;
+          }
           return returnIntent == null
               ? '/setup-username'
               : returnIntent.authLocation('/setup-username');
@@ -182,6 +188,10 @@ GoRouter buildRouter(
       GoRoute(
         path: '/account/export',
         builder: (_, _) => const AccountExportScreen(),
+      ),
+      GoRoute(
+        path: '/account/deletion',
+        builder: (_, _) => const AccountDeletionScreen(),
       ),
       GoRoute(
         path: '/profile/edit',

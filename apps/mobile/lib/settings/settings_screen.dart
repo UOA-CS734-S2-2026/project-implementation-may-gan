@@ -460,6 +460,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           title: const Text('Your data export'),
                           onTap: () => context.push('/account/export'),
                         ),
+                      ListTile(
+                        key: const Key('settings.accountDeletion'),
+                        title: const Text('Account deletion'),
+                        subtitle: Text(
+                          services.accountDeletion == null
+                              ? 'Unavailable until protected staging activation is complete.'
+                              : 'Request with fresh password verification.',
+                        ),
+                        onTap: () => context.push('/account/deletion'),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 24),

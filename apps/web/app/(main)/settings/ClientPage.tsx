@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/session/hooks";
 import { SignOutButton } from "./_components/SignOutButton";
@@ -70,6 +71,12 @@ export default function SettingsPage() {
         </section>
 
         <TrashPanel key={`${user.id}:${session?.id ?? "no-session"}`} actorId={user.id} />
+
+        <section className="space-y-2 rounded-lg border border-red-500/30 p-4">
+          <h2 className="text-sm font-medium">Account deletion</h2>
+          <p className="text-xs text-foreground/60">Deletion requests stay unavailable until protected staging activation is complete. Your Trash and data export remain separate.</p>
+          <Link className="text-sm underline" href="/account/deletion">Manage account deletion</Link>
+        </section>
 
         <section className="space-y-2 rounded-lg border border-foreground/10 p-4">
           <h2 className="text-sm font-medium">Legal</h2>

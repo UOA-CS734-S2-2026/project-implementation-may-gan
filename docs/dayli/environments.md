@@ -150,6 +150,10 @@ The staging owner removed the temporary passwordless probe role. The `migrator` 
 2. Configure the staging Google clients and a verified Resend sender as described in [Authentication setup and operations](../../apps/docs/content/docs/systems/accounts-and-authentication/setup-and-operations.mdx). Keep their secrets out of Git and enable complete provider bindings in one reviewed Worker version. Until then, email/password remains the only configured provider.
 3. Test Google on the staging web host and Android and iOS devices. Test password-reset delivery with an approved mailbox. Browser email/password and sign-out checks have passed manually, but native sessions, provider callbacks, and reset emails still need live tests.
 
+### Account deletion staging admission
+
+Account deletion requests are off in every environment, including staging. Do not set the four `STAGING_ACCOUNT_DELETION_*` values until the purge worker, durable realtime-revocation retry and reconciliation, alerts, recovery procedure, and a single synthetic-owner staging proof are reviewed together. The API admission check additionally requires the exact direct staging API origin, exact approval strings, a proven purge marker, and the single approved owner ID. The current API and client builds still fail closed while durable realtime revocation is absent. Removing any approval and redeploying returns new requests to `503`; it does not claim to stop or complete a previously accepted purge. Native Google verification remains unavailable until a securely action-bound native flow exists.
+
 Google OAuth and Resend requirements are in [Authentication setup and operations](../../apps/docs/content/docs/systems/accounts-and-authentication/setup-and-operations.mdx). Do not record credentials, connection strings, project IDs, tokens, certificate keys, reset links, or session tokens in Git, chat, PRs, logs, or tracked Wrangler files.
 
 ### Production reset and release

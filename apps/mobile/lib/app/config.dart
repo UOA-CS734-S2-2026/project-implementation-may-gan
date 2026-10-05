@@ -28,6 +28,9 @@ class AppConfig {
   bool get accountExportEnabled =>
       stagingExportApproved &&
       apiBaseUrl == 'https://api.staging.dayli.agroupforcoders.com';
+  // Keep native request submission fail closed until server-side realtime
+  // revocation has durable retry and reconciliation evidence.
+  bool get accountDeletionEnabled => false;
 
   static AppConfig fromEnvironment() {
     const apiBaseUrl = String.fromEnvironment('DAYLI_API_BASE_URL');

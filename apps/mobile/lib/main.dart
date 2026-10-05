@@ -36,6 +36,7 @@ import 'notifications/push_registration_client.dart';
 import 'notifications/push_service.dart';
 import 'posts/post_submitter.dart';
 import 'profile/streak_cache.dart';
+import 'settings/account_deletion_client.dart';
 import 'settings/account_export_client.dart';
 
 Future<void> main() async {
@@ -199,6 +200,12 @@ Future<void> main() async {
         notificationPreflight: notificationPreflight,
         accountExports: config.accountExportEnabled
             ? HttpAccountExportClient(
+                baseUrl: config.apiBaseUrl,
+                bearerToken: nativeSession.bearerToken,
+              )
+            : null,
+        accountDeletion: config.accountDeletionEnabled
+            ? HttpAccountDeletionClient(
                 baseUrl: config.apiBaseUrl,
                 bearerToken: nativeSession.bearerToken,
               )

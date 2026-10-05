@@ -84,6 +84,20 @@ describe("Better Auth compatibility route", () => {
     expect(readBetterAuthRuntimeConfiguration({ ...bindings, BETTER_AUTH_TRUSTED_ORIGINS: "https://web.example.test" })).toBeUndefined();
   });
 
+  it("keeps the direct API origin distinct when browser proxy auth uses the web origin", () => {
+    const configuration = readBetterAuthRuntimeConfiguration({
+      HYPERDRIVE: { connectionString: "postgresql://app:app@localhost:5433/dayli_test" },
+      BETTER_AUTH_SECRET: "test-only-better-auth-secret-that-is-at-least-32-characters",
+      BETTER_AUTH_BASE_URL: "https://web.staging.example.test",
+      PUBLIC_API_BASE_URL: "https://api.staging.example.test",
+      BETTER_AUTH_TRUSTED_ORIGINS: "https://web.staging.example.test,https://api.staging.example.test",
+    });
+    expect(configuration).toMatchObject({
+      baseURL: "https://web.staging.example.test",
+      publicApiBaseURL: "https://api.staging.example.test",
+    });
+  });
+
   it("distinguishes disabled, configured, and partial provider bindings without returning secrets", () => {
     const disabled = readAuthIntegrationConfiguration({});
     expect(disabled).toEqual({ state: "disabled", google: "disabled", resend: "disabled" });

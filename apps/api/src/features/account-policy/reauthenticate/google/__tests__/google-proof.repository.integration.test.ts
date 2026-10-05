@@ -17,6 +17,8 @@ const configuration = {
   clientId: "web-client-id",
   clientSecret: "test-only-google-secret-at-least-32-characters",
   redirectUri: "https://api.example.test/api/auth/callback/google",
+  completionOrigin: "https://web.example.test",
+  stateSecret: "test-only-google-state-secret-at-least-32-characters",
 };
 const digest = async (value: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))),
   (byte) => byte.toString(16).padStart(2, "0")).join("");
