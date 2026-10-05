@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import { AwsClient } from "aws4fetch";
 import postgres, { type Sql, type TransactionSql } from "postgres";
 import { validateStagingOrigins } from "../../../scripts/staging-origins.mjs";
@@ -10,9 +11,14 @@ const shaPattern = /^[a-f0-9]{40}$/;
 const markerPattern = /^staging-trash-proof-[0-9a-f]{32}$/;
 const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0xff, 0xd9]);
 const requiredTrashMigrations = [30, 31, 32, 33, 34];
+const defaultMigrationsRoot = fileURLToPath(new URL("../migrations", import.meta.url));
 
 type Database = Sql<Record<string, never>>;
 type Fixture = { ownerId: string; postId: string; mediaId: string; reservationId: string; objectKey: string; generation: number };
+export type ProofPhase = "configuration" | "migration_ledger" | "restore_fixture" | "purge_fixture" |
+  "guarded_seed" | "scheduled_cleanup" | "complete";
+export type ProofFailureCategory = "configuration_failure" | "migration_ledger_failure" | "normal_api_failure" |
+  "guard_failure" | "scheduled_cleanup_failure";
 type Evidence = {
   targetSha: string;
   deployedSha: string;
@@ -22,6 +28,8 @@ type Evidence = {
   startedAt: string;
   finishedAt: string;
   outcome: "passed" | "incomplete";
+  phase: ProofPhase;
+  failureCategory: ProofFailureCategory | null;
   checks: Record<string, boolean>;
   counts: Record<string, number>;
 };
@@ -39,7 +47,7 @@ export function validateMarker(marker: string): string {
   return marker;
 }
 
-export async function verifyMigrationLedger(sql: Database, migrationsRoot = resolve("packages/db/migrations")): Promise<number> {
+export async function discoverExpectedMigrationLedger(migrationsRoot = defaultMigrationsRoot) {
   const journal = JSON.parse(await readFile(resolve(migrationsRoot, "meta/_journal.json"), "utf8")) as {
     entries: Array<{ idx: number; tag: string }>;
   };
@@ -47,10 +55,14 @@ export async function verifyMigrationLedger(sql: Database, migrationsRoot = reso
   if (!requiredTrashMigrations.every((idx) => entries.some((entry) => entry.idx === idx))) {
     throw new Error("Required Trash migrations are absent from the reviewed ledger.");
   }
-  const expected = await Promise.all(entries.map(async (entry) => ({
+  return Promise.all(entries.map(async (entry) => ({
     idx: entry.idx,
     hash: createHash("sha256").update(await readFile(resolve(migrationsRoot, `${entry.tag}.sql`))).digest("hex"),
   })));
+}
+
+export async function verifyMigrationLedger(sql: Database, migrationsRoot = defaultMigrationsRoot): Promise<number> {
+  const expected = await discoverExpectedMigrationLedger(migrationsRoot);
   const relation = await sql<{ ledger: string | null }[]>`select to_regclass('drizzle.__drizzle_migrations')::text as ledger`;
   if (relation.length !== 1 || relation[0]?.ledger !== "drizzle.__drizzle_migrations") {
     throw new Error("Migration ledger is unavailable.");
@@ -60,6 +72,14 @@ export async function verifyMigrationLedger(sql: Database, migrationsRoot = reso
     throw new Error("Staging migration ledger does not exactly match the target revision.");
   }
   return applied.length;
+}
+
+export function classifyProofFailure(phase: ProofPhase): ProofFailureCategory {
+  if (phase === "configuration") return "configuration_failure";
+  if (phase === "migration_ledger") return "migration_ledger_failure";
+  if (phase === "guarded_seed") return "guard_failure";
+  if (phase === "scheduled_cleanup") return "scheduled_cleanup_failure";
+  return "normal_api_failure";
 }
 
 function digest(value: string): string {
@@ -280,15 +300,17 @@ async function run(): Promise<void> {
     targetSha, deployedSha: targetSha,
     runDigest: digest(`${required("GITHUB_RUN_ID")}:${required("GITHUB_RUN_ATTEMPT")}:${targetSha}`),
     markerDigest: digest(marker), acceleratedSyntheticProof: true, startedAt, finishedAt: startedAt,
-    outcome: "incomplete",
+    outcome: "incomplete", phase: "configuration", failureCategory: null,
     checks: { revisionAttested: true, metadataPreflight: true, migrationLedger: false, restore: false,
       guardedSeed: false, databaseAbsent: false, objectAbsent: false },
-    counts: { migrations: 0, postsRemaining: 0, mediaRemaining: 0, reservationsRemaining: 0 },
+    counts: { migrations: 0, postsRemaining: -1, mediaRemaining: -1, reservationsRemaining: -1 },
   };
-  const databaseUrl = required("DATABASE_URL");
-  if (new URL(databaseUrl).username !== "migrator") throw new Error("The guarded proof requires the staging migrator role.");
-  const sql = postgres(databaseUrl, { max: 1, connect_timeout: 10 });
+  let sql: Database | undefined;
   try {
+    const databaseUrl = required("DATABASE_URL");
+    if (new URL(databaseUrl).username !== "migrator") throw new Error("The guarded proof requires the staging migrator role.");
+    sql = postgres(databaseUrl, { max: 1, connect_timeout: 10 });
+    evidence.phase = "migration_ledger";
     evidence.counts.migrations = await verifyMigrationLedger(sql);
     evidence.checks.migrationLedger = true;
     const { apiOrigin: origin } = validateStagingOrigins({
@@ -296,27 +318,35 @@ async function run(): Promise<void> {
       apiOrigin: required("STAGING_AUTH_API_ORIGIN"),
       webOrigin: required("STAGING_AUTH_WEB_ORIGIN"),
     });
+    evidence.phase = "restore_fixture";
     const restoreToken = await createAccount(origin, marker, 1);
     const restoreFixture = await createFixture(origin, restoreToken, marker, 1);
     await trashFixture(origin, restoreToken, restoreFixture);
     await proveAndRestore(origin, restoreToken, restoreFixture);
     evidence.checks.restore = true;
+    evidence.phase = "purge_fixture";
     const purgeToken = await createAccount(origin, marker, 2);
     const purgeFixture = await createFixture(origin, purgeToken, marker, 2);
     await trashFixture(origin, purgeToken, purgeFixture);
+    evidence.phase = "guarded_seed";
     purgeFixture.objectKey = await sql.begin((tx) => seedPastDeadline(tx, { ...purgeFixture, marker }));
     evidence.checks.guardedSeed = true;
+    evidence.phase = "scheduled_cleanup";
     const result = await awaitScheduledWorker(sql, purgeFixture);
     evidence.counts.postsRemaining = result.counts.post;
     evidence.counts.mediaRemaining = result.counts.media;
     evidence.counts.reservationsRemaining = result.counts.reservation;
     evidence.checks.databaseAbsent = Object.values(result.counts).every((count) => count === 0);
     evidence.checks.objectAbsent = result.objectAbsent;
+    evidence.phase = "complete";
     evidence.outcome = "passed";
+  } catch (error) {
+    evidence.failureCategory = classifyProofFailure(evidence.phase);
+    throw error;
   } finally {
     evidence.finishedAt = new Date().toISOString();
     await writeEvidence(evidencePath, evidence);
-    await sql.end({ timeout: 5 });
+    if (sql) await sql.end({ timeout: 5 });
   }
 }
 

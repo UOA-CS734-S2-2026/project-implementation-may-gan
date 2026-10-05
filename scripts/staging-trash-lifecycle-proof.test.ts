@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { validateMarker, validateProofTarget } from "../packages/db/scripts/staging-trash-lifecycle-proof";
+import { fileURLToPath } from "node:url";
+import {
+  classifyProofFailure,
+  discoverExpectedMigrationLedger,
+  validateMarker,
+  validateProofTarget,
+} from "../packages/db/scripts/staging-trash-lifecycle-proof";
 import { createStagingTrashProofProbe } from "./create-staging-trash-proof-probe.mjs";
 import { createStagingWorkerConfigs } from "./staging-worker-config.mjs";
 import { verifyStagingTrashProofStorage } from "./verify-staging-trash-proof-storage.mjs";
@@ -83,6 +89,34 @@ test("storage metadata preflight fails before any provider request when configur
   }));
 });
 
+test("discovers the exact migration ledger from repository and package working directories without a database", async () => {
+  const original = process.cwd();
+  try {
+    process.chdir(fileURLToPath(new URL("..", import.meta.url)));
+    const fromRepository = await discoverExpectedMigrationLedger();
+    process.chdir(fileURLToPath(new URL("../packages/db", import.meta.url)));
+    const fromPackage = await discoverExpectedMigrationLedger();
+    assert.deepEqual(fromPackage, fromRepository);
+    assert.equal(fromPackage.some((entry) => entry.idx === 30), true);
+    assert.equal(fromPackage.some((entry) => entry.idx === 34), true);
+    assert.equal(fromPackage.every((entry) => /^[a-f0-9]{64}$/.test(entry.hash)), true);
+  } finally {
+    process.chdir(original);
+  }
+});
+
+test("maps proof phases to sanitized failure categories", () => {
+  assert.equal(classifyProofFailure("configuration"), "configuration_failure");
+  assert.equal(classifyProofFailure("migration_ledger"), "migration_ledger_failure");
+  assert.equal(classifyProofFailure("restore_fixture"), "normal_api_failure");
+  assert.equal(classifyProofFailure("purge_fixture"), "normal_api_failure");
+  assert.equal(classifyProofFailure("guarded_seed"), "guard_failure");
+  assert.equal(classifyProofFailure("scheduled_cleanup"), "scheduled_cleanup_failure");
+  assert.equal(classifyProofFailure("complete"), "normal_api_failure");
+  assert.match(proof, /failureCategory: ProofFailureCategory \| null/);
+  assert.doesNotMatch(proof, /failureCategory\s*=\s*error|error\.message|error\.stack/);
+});
+
 test("guarded acceleration is parameterized, exact-row scoped, and bounded", () => {
   assert.equal(validateMarker("staging-trash-proof-" + "f".repeat(32)), "staging-trash-proof-" + "f".repeat(32));
   assert.throws(() => validateMarker("existing-content"));
@@ -115,6 +149,8 @@ test("logs and evidence remain sanitized and failures preserve exact fixtures", 
   assert.doesNotMatch(proof, /console\.(log|error)\([^\n]*(token|email|objectKey|ownerId|postId|reservationId|databaseUrl)/i);
   assert.match(proof, /outcome=incomplete fixtures=preserved evidence=sanitized/);
   assert.match(proof, /markerDigest/);
+  assert.match(proof, /phase: ProofPhase/);
+  assert.match(proof, /failureCategory: ProofFailureCategory \| null/);
   assert.doesNotMatch(proof, /JSON\.stringify\(evidence[^\n]*(owner|post|reservation|email|token|object)/i);
   assert.match(workflow, /if: always\(\)/);
 });
