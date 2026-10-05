@@ -1,4 +1,7 @@
 import { createDayliDatabase, schema, sql } from "@dayli/db";
+import { once } from "node:events";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { count, eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
@@ -82,6 +85,46 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ email: "postgres@example.test", password: "not-a-real-password" }),
   }));
+}
+
+async function nodeFetchThroughHttp(app: ReturnType<typeof createProductionApp>, path: string, init: RequestInit,
+  inspectHeaders?: (headers: Headers) => void) {
+  const server = createServer(async (incoming, outgoing) => {
+    try {
+      const chunks: Buffer[] = [];
+      for await (const chunk of incoming) chunks.push(Buffer.from(chunk));
+      const body = Buffer.concat(chunks);
+      const requestHeaders = new Headers();
+      for (const [name, value] of Object.entries(incoming.headers)) {
+        if (Array.isArray(value)) value.forEach((item) => requestHeaders.append(name, item));
+        else if (value !== undefined) requestHeaders.set(name, value);
+      }
+      requestHeaders.set("host", new URL(origin).host);
+      requestHeaders.set("cf-connecting-ip", "198.51.100.9");
+      inspectHeaders?.(requestHeaders);
+      const response = await app.fetch(new Request(`${origin}${incoming.url}`, {
+        method: incoming.method,
+        headers: requestHeaders,
+        ...(body.byteLength > 0 ? { body } : {}),
+      }));
+      const headers: Record<string, string> = {};
+      response.headers.forEach((value, name) => { headers[name] = value; });
+      outgoing.writeHead(response.status, headers);
+      outgoing.end(Buffer.from(await response.arrayBuffer()));
+    } catch {
+      outgoing.writeHead(500);
+      outgoing.end();
+    }
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address() as AddressInfo;
+  try {
+    return await fetch(`http://127.0.0.1:${address.port}${path}`, init);
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
 }
 
 (hasTestDatabaseConfig ? describe : describe.skip)("Better Auth PostgreSQL persistence", () => {
@@ -287,6 +330,63 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
       headers: { authorization: `Bearer ${expiryToken}` },
     }));
     await expect(expired.json()).resolves.toBeNull();
+  });
+
+  it("requires the validated web Origin for Node fetch signup metadata", async () => {
+    const app = createAppForEnv({
+      ...productionAuthEnvironment(),
+      BETTER_AUTH_BASE_URL: "https://web.example.test",
+      PUBLIC_API_BASE_URL: origin,
+    });
+    const termsId = `node-fetch-registration-${crypto.randomUUID()}`;
+    const email = `node-fetch-registration-${crypto.randomUUID()}@example.test`;
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const binding = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const hash = async (text: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))),
+      (byte) => byte.toString(16).padStart(2, "0")).join("");
+    await migrator.db.insert(schema.legalDocumentVersions).values({
+      id: termsId, kind: "terms", version: Math.floor(Math.random() * 1_000_000_000) + 1,
+      contentDigest: "d".repeat(64), status: "effective", effectiveAt: new Date("2026-01-01T00:00:00Z"),
+    });
+    await migrator.db.insert(schema.registrationIntents).values({
+      tokenDigest: await hash(token), flowBindingDigest: await hash(`email:${binding}`),
+      termsVersionId: termsId, ageDeclarationVersion: "age-16-v1", expiresAt: sql`now() + interval '10 minutes'`,
+    });
+    const observedHeaders: Headers[] = [];
+    const signup = (headers: Record<string, string>) => nodeFetchThroughHttp(app, "/api/auth/sign-up/email", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-dayli-registration-intent": token,
+        "x-dayli-registration-binding": binding,
+        ...headers,
+      },
+      body: JSON.stringify({ name: "Node Fetch Registrant", username: `node_fetch_${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`,
+        email, password: "not-a-real-password" }),
+    }, (headersFromFetch) => observedHeaders.push(headersFromFetch));
+    try {
+      const untrustedOrigin = await signup({ origin: "https://untrusted.example.test" });
+      expect(untrustedOrigin.status).toBe(403);
+      expect(observedHeaders[0]?.get("sec-fetch-mode")).toBe("cors");
+      expect(observedHeaders[0]?.get("origin")).toBe("https://untrusted.example.test");
+      expect(await migrator.db.select({ id: schema.user.id }).from(schema.user).where(eq(schema.user.email, email))).toEqual([]);
+      const [unused] = await migrator.db.select({ consumedAt: schema.registrationIntents.consumedAt })
+        .from(schema.registrationIntents).where(eq(schema.registrationIntents.tokenDigest, await hash(token)));
+      expect(unused?.consumedAt).toBeNull();
+
+      const admitted = await signup({ origin: "https://web.example.test" });
+      expect(admitted.status).toBe(200);
+      expect(admitted.headers.get("set-auth-token")).toBeTruthy();
+      const [owner] = await migrator.db.select({ id: schema.user.id }).from(schema.user).where(eq(schema.user.email, email));
+      expect(owner?.id).toBeTruthy();
+      expect(await migrator.db.select().from(schema.session).where(eq(schema.session.userId, owner!.id))).toHaveLength(1);
+      expect(await migrator.db.select().from(schema.termsAcceptances).where(eq(schema.termsAcceptances.userId, owner!.id))).toHaveLength(1);
+      expect(await migrator.db.select().from(schema.ageDeclarations).where(eq(schema.ageDeclarations.userId, owner!.id))).toHaveLength(1);
+    } finally {
+      await migrator.db.delete(schema.user).where(eq(schema.user.email, email));
+      await migrator.db.delete(schema.registrationIntents).where(eq(schema.registrationIntents.termsVersionId, termsId));
+      await migrator.db.delete(schema.legalDocumentVersions).where(eq(schema.legalDocumentVersions.id, termsId));
+    }
   });
 
   it("records explicit acceptance for an existing signed-in user without inferring it from login", async () => {
