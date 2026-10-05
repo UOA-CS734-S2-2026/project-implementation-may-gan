@@ -81,6 +81,6 @@ echo 'Running Flutter checks'
   fi
 )
 
-VERIFY_POSTGRES_PROJECT="dayli-verify-local-$$" bash "$repo_root/scripts/verify-postgres.sh"
+VERIFY_POSTGRES_PROJECT="${VERIFY_POSTGRES_PROJECT:-dayli-verify-local-$$}" bash "$repo_root/scripts/verify-postgres.sh"
 
 echo 'Local verification passed.'

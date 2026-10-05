@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test, type Browser, type Page, type TestInfo } from "@playwright/test";
+import { signUpAcceptedApiFixture, signUpWithExplicitConsent } from "./support/legal-consent";
 
 // Creating two accounts and loading multiple contexts can cold-start slowly on hosted runners.
 test.setTimeout(120_000);
@@ -11,14 +12,7 @@ function database(query: string): string {
 }
 
 async function signUp(page: Page, username: string, email: string, password: string, publicName: string) {
-  const fixtureOctet = 20 + [...username].reduce((sum, character) => sum + character.charCodeAt(0), 0) % 200;
-  const response = await page.request.post(`${process.env.E2E_API_ORIGIN}/api/auth/sign-up/email`, {
-    headers: { "cf-connecting-ip": `198.51.100.${fixtureOctet}` },
-    data: { name: publicName, username, displayUsername: publicName, email, password },
-  });
-  expect(response.status()).toBe(200);
-  await page.goto("/home");
-  await expect(page).toHaveURL(/\/home$/);
+  await signUpAcceptedApiFixture(page, { username, email, password, publicName });
 }
 
 async function setupIntentFixture(browser: Browser, authorPage: Page, testInfo: TestInfo, activeFriends: boolean) {
@@ -93,12 +87,9 @@ test("an anonymous visitor can browse a synthetic public profile and safely retu
   const secondEmail = `${secondUsername}@example.test`;
 
   await page.goto("/sign-up");
-  await page.getByLabel("Username").fill(username);
-  await page.getByLabel("Public name (optional)").fill("Public E2E");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Let's go" }).click();
-  await expect(page).toHaveURL(/\/home$/);
+  await signUpWithExplicitConsent(page, {
+    username, publicName: "Public E2E", email, password,
+  });
 
   await page.goto("/settings");
   const visibility = page.getByRole("switch", { name: "Private profile" });
@@ -108,12 +99,9 @@ test("an anonymous visitor can browse a synthetic public profile and safely retu
   const secondAccount = await browser.newContext();
   const secondAccountPage = await secondAccount.newPage();
   await secondAccountPage.goto("/sign-up");
-  await secondAccountPage.getByLabel("Username").fill(secondUsername);
-  await secondAccountPage.getByLabel("Public name (optional)").fill("Alternate E2E");
-  await secondAccountPage.getByLabel("Email").fill(secondEmail);
-  await secondAccountPage.getByLabel("Password").fill(password);
-  await secondAccountPage.getByRole("button", { name: "Let's go" }).click();
-  await expect(secondAccountPage).toHaveURL(/\/home$/);
+  await signUpWithExplicitConsent(secondAccountPage, {
+    username: secondUsername, publicName: "Alternate E2E", email: secondEmail, password,
+  });
   await secondAccount.close();
 
   const apiOrigin = process.env.E2E_API_ORIGIN!;

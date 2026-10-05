@@ -1,4 +1,5 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { signUpWithExplicitConsent } from "./support/legal-consent";
 
 type Account = { username: string; displayName: string; email: string; password: string };
 
@@ -13,12 +14,12 @@ function account(testInfo: TestInfo, role: string): Account {
 async function signUp(page: Page, person: Account) {
   await page.goto(origin);
   await page.getByRole("link", { name: /sign up/i }).click();
-  await page.getByLabel("Username").fill(person.username);
-  await page.getByLabel("Public name (optional)").fill(person.displayName);
-  await page.getByLabel("Email").fill(person.email);
-  await page.getByLabel("Password").fill(person.password);
-  await page.getByRole("button", { name: "Let's go" }).click();
-  await expect(page).toHaveURL(/\/home$/);
+  await signUpWithExplicitConsent(page, {
+    username: person.username,
+    publicName: person.displayName,
+    email: person.email,
+    password: person.password,
+  });
 }
 
 async function sendWithEnter(page: Page, text: string) {

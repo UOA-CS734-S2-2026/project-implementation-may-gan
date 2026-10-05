@@ -22,6 +22,7 @@ import 'package:go_router/go_router.dart';
 import 'package:integration_test/integration_test.dart';
 
 import '../test/support/fakes.dart';
+import 'support/legal_consent.dart';
 
 const _apiBaseUrl = String.fromEnvironment('DPP004_API_BASE_URL');
 const _publicUsername = String.fromEnvironment('DPP004_PUBLIC_USERNAME');
@@ -42,6 +43,8 @@ const _secondViewerEmail = String.fromEnvironment('DPP005_SECOND_VIEWER_EMAIL');
 const _secondViewerPassword = String.fromEnvironment(
   'DPP005_SECOND_VIEWER_PASSWORD',
 );
+const _blockedEmail = String.fromEnvironment('DPP005_BLOCKED_EMAIL');
+const _blockedPassword = String.fromEnvironment('DPP005_BLOCKED_PASSWORD');
 const _caPemBase64 = String.fromEnvironment('DPP004_CA_PEM_B64');
 const _replayIntentId = String.fromEnvironment('DPP005_REPLAY_INTENT_ID');
 const _replayIssuedAt = int.fromEnvironment('DPP005_REPLAY_ISSUED_AT');
@@ -63,6 +66,8 @@ const _fixtureReady =
     _secondViewerToken != '' &&
     _secondViewerEmail != '' &&
     _secondViewerPassword != '' &&
+    _blockedEmail != '' &&
+    _blockedPassword != '' &&
     _caPemBase64 != '' &&
     _replayIntentId != '' &&
     _replayIssuedAt > 0;
@@ -194,6 +199,35 @@ void main() {
       expect(mediaResponse.statusCode, HttpStatus.ok);
       expect(mediaResponse.headers.contentType?.mimeType, 'image/png');
       expect(mediaBytes.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
+    },
+    skip: !_fixtureReady,
+  );
+
+  testWidgets(
+    'blocked existing account explicitly accepts the current legal policy',
+    (tester) async {
+      trustFixtureCertificate();
+      final harness = realReadServices();
+      await tester.pumpWidget(
+        DayliApp(
+          services: harness.services,
+          useGoogleFonts: false,
+          initialLocation: '/welcome',
+        ),
+      );
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      await tester.tap(find.byKey(const Key('landing.sign-in')));
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      await tester.enterText(
+        find.byKey(const Key('auth.email')),
+        _blockedEmail,
+      );
+      await tester.enterText(
+        find.byKey(const Key('auth.password')),
+        _blockedPassword,
+      );
+      await tester.tap(find.byKey(const Key('auth.submit')));
+      await acceptRequiredLegalConsent(tester, harness.services.session);
     },
     skip: !_fixtureReady,
   );
