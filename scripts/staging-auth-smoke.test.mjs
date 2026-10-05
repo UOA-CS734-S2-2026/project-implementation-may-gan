@@ -144,6 +144,18 @@ function browserType(options = {}) {
             if (options.sessionGetStatus !== undefined) emitAuthRequest("/api/auth/get-session", "GET", options.sessionGetStatus);
             if (options.sessionRefreshStatus !== undefined) emitAuthRequest("/api/auth/get-session", "POST", options.sessionRefreshStatus);
             if (options.profileGetStatus !== undefined) emitAuthRequest("/api/v1/profile/username", "GET", options.profileGetStatus);
+            if (options.settingsResponseStatus !== undefined) {
+              const request = {
+                url: () => `${STAGING_ORIGIN}/settings?smoke=auth&_rsc=private-password`,
+                method: () => "GET",
+                isNavigationRequest: () => options.settingsDocumentRequest ?? false,
+                resourceType: () => options.settingsDocumentRequest ? "document" : "fetch",
+              };
+              for (const listener of listeners.request) listener(request);
+              if (options.settingsResponseStatus !== null) {
+                for (const listener of listeners.response) listener({ request: () => request, status: () => options.settingsResponseStatus });
+              }
+            }
             if (options.signInDestination) currentUrl = options.signInDestination;
             else if (!options.loginNavigationFails && state.session) currentUrl = protectedUrl;
           } };
@@ -352,10 +364,11 @@ test("login timeout reports fixed session request and submit phases", async () =
     sessionGetStatus: 200,
     sessionRefreshStatus: 401,
     profileGetStatus: 429,
+    settingsResponseStatus: 200,
     errorText: "private-password",
   });
   assert.equal(result.passed, false);
-  assert.match(result.output, /phase=login_failure destination=sign_in_expected submit_state=pending session_get=success session_refresh=unauthorized profile_get=rate_limited/);
+  assert.match(result.output, /phase=login_failure destination=sign_in_expected submit_state=pending session_get=success session_refresh=unauthorized profile_get=rate_limited settings_response=success settings_request=fetch/);
   assertNoSensitiveOutput(result);
 });
 
@@ -363,10 +376,17 @@ test("diagnostic reporter rejects unrecognized request outcomes", () => {
   const lines = [];
   createSafeReporter((line) => lines.push(line))({
     step: "diagnostic", outcome: "observed", durationMs: 0, phase: "login_failure", destination: "sign_in_expected",
-    progress: { submitState: "private-password", sessionGet: "private-password", sessionRefresh: "private-password", profileGet: "private-password" },
+    progress: { submitState: "private-password", sessionGet: "private-password", sessionRefresh: "private-password", profileGet: "private-password", settingsResponse: "private-password", settingsRequest: "private-password" },
   });
-  assert.match(lines[0], /submit_state=unknown session_get=unknown session_refresh=unknown profile_get=unknown$/);
+  assert.match(lines[0], /submit_state=unknown session_get=unknown session_refresh=unknown profile_get=unknown settings_response=unknown settings_request=unknown$/);
   assert.doesNotMatch(lines[0], /private-password/);
+});
+
+test("a requested Settings document without a response is distinct from no attempt", async () => {
+  const result = await runDefault({ loginNavigationFails: true, settingsDocumentRequest: true, settingsResponseStatus: null });
+  assert.equal(result.passed, false);
+  assert.match(result.output, /settings_response=no_response settings_request=document/);
+  assertNoSensitiveOutput(result);
 });
 
 test("failed navigation reports a fixed destination before cleanup changes the page", async () => {
