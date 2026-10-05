@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   session: vi.fn(), status: vi.fn(), password: vi.fn(), request: vi.fn(), cancel: vi.fn(), google: vi.fn(), key: vi.fn(), signOut: vi.fn(),
@@ -14,6 +14,8 @@ vi.mock("@/lib/account/deletion", () => ({
 import { DeletionPanel } from "./DeletionPanel";
 
 const active = { state: "active", generation: 0, requestId: null, requestedAt: null, cancelUntil: null, purgeDueAt: null };
+
+afterEach(() => vi.useRealTimers());
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -81,6 +83,26 @@ describe("account deletion owner flow", () => {
     expect(mocks.password).not.toHaveBeenCalled();
   });
 
+  it("recovers from a callback failure handoff and permits a new verification attempt", async () => {
+    const first = { closed: false, location: { assign: vi.fn() }, close: vi.fn() };
+    const second = { closed: false, location: { assign: vi.fn() }, close: vi.fn() };
+    vi.spyOn(window, "open").mockReturnValueOnce(first as unknown as Window).mockReturnValueOnce(second as unknown as Window);
+    mocks.google.mockResolvedValue("https://accounts.google.test/authorize");
+    render(<DeletionPanel requestEnabled />);
+    await screen.findByText("Status: active");
+    fireEvent.click(screen.getByRole("checkbox"));
+    const verify = screen.getByRole("button", { name: "Verify with Google instead" });
+    fireEvent.click(verify);
+    await waitFor(() => expect(first.location.assign).toHaveBeenCalled());
+    window.dispatchEvent(new MessageEvent("message", { origin: window.location.origin, source: first as unknown as MessageEventSource, data: {
+      type: "dayli.account-management-proof-failure", action: "request_deletion",
+    } }));
+    await screen.findByText(/Google verification did not complete/);
+    expect(verify).not.toBeDisabled();
+    fireEvent.click(verify);
+    await waitFor(() => expect(second.location.assign).toHaveBeenCalled());
+  });
+
   it("recovers from a closed Google popup and permits a new verification attempt", async () => {
     const first = { closed: false, location: { assign: vi.fn() }, close: vi.fn() };
     const second = { closed: false, location: { assign: vi.fn() }, close: vi.fn() };
@@ -97,6 +119,25 @@ describe("account deletion owner flow", () => {
     expect(verify).not.toBeDisabled();
     fireEvent.click(verify);
     await waitFor(() => expect(second.location.assign).toHaveBeenCalled());
+  });
+
+  it("recovers from a hung Google authorization popup after a bounded timeout", async () => {
+    const first = { closed: false, location: { assign: vi.fn() }, close: vi.fn() };
+    const second = { closed: false, location: { assign: vi.fn() }, close: vi.fn() };
+    vi.spyOn(window, "open").mockReturnValueOnce(first as unknown as Window).mockReturnValueOnce(second as unknown as Window);
+    mocks.google.mockImplementationOnce(() => new Promise<string>(() => undefined)).mockResolvedValueOnce("https://accounts.google.test/authorize");
+    render(<DeletionPanel requestEnabled />);
+    await screen.findByText("Status: active");
+    vi.useFakeTimers();
+    fireEvent.click(screen.getByRole("checkbox"));
+    const verify = screen.getByRole("button", { name: "Verify with Google instead" });
+    fireEvent.click(verify);
+    await act(async () => { await vi.advanceTimersByTimeAsync(120_000); });
+    expect(screen.getByText(/Google verification timed out/)).toBeInTheDocument();
+    expect(verify).not.toBeDisabled();
+    fireEvent.click(verify);
+    await act(async () => {});
+    expect(second.location.assign).toHaveBeenCalledWith("https://accounts.google.test/authorize");
   });
 
   it("recovers from a Google authorization setup error", async () => {

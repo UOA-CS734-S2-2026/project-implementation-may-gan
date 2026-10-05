@@ -32,6 +32,12 @@ function failure(status: number): Response {
   return Response.json({ error: { code: "GOOGLE_MANAGEMENT_PROOF_FAILED" } }, { status, headers });
 }
 
+function handoffFailure(action: AccountManagementAction, completionOrigin: string): Response {
+  const payload = JSON.stringify({ type: "dayli.account-management-proof-failure", action });
+  const body = `<!doctype html><meta charset="utf-8"><title>Google verification did not complete</title><script>const failure=${payload};if(window.opener){window.opener.postMessage(failure,${JSON.stringify(completionOrigin)});window.close()}else{document.body.textContent="Google verification did not complete. Return to Dayli to try again."}</script>`;
+  return new Response(body, { status: 200, headers: { ...headers, "Content-Type": "text/html; charset=utf-8" } });
+}
+
 /**
  * The single-use grant never enters a URL. A popup can deliver it only to its
  * opener at the signed, intent-bound trusted origin. The opener verifies the
@@ -49,8 +55,7 @@ export async function handleGoogleManagementCallback(request: Request, deps: Goo
   const query = new URL(request.url).searchParams;
   const state = query.get("state");
   const code = query.get("code");
-  if (!state || !code || code.length > 2048 || /\s/.test(code)
-    || query.getAll("state").length !== 1 || query.getAll("code").length !== 1 || query.has("error")) return failure(400);
+  if (!state || query.getAll("state").length !== 1) return failure(400);
   const completionOrigin = await googleManagementCompletionOrigin(state, deps.configuration.stateSecret);
   if (!completionOrigin || !deps.trustedOrigins.includes(completionOrigin)) return failure(400);
   let actor: Awaited<ReturnType<typeof deps.resolveSession>>;
@@ -59,9 +64,12 @@ export async function handleGoogleManagementCallback(request: Request, deps: Goo
   let intent: Awaited<ReturnType<typeof deps.claim>>;
   try { intent = await deps.claim({ state, ...actor }); } catch { return failure(503); }
   if (!intent) return failure(401);
+  if (!code || code.length > 2048 || /\s/.test(code) || query.getAll("code").length !== 1 || query.has("error")) {
+    return handoffFailure(intent.action, completionOrigin);
+  }
   let result: Awaited<ReturnType<NonNullable<typeof deps.exchange>>>;
   try { result = await (deps.exchange ?? exchangeGoogleManagementCode)({ state, code, ...deps.configuration }); }
-  catch { return failure(503); }
+  catch { return handoffFailure(intent.action, completionOrigin); }
   let proof: Awaited<ReturnType<NonNullable<typeof deps.verify>>>;
   try {
     proof = await (deps.verify ?? verifyGoogleManagementIdToken)({
@@ -72,11 +80,11 @@ export async function handleGoogleManagementCallback(request: Request, deps: Goo
       nonceDigest: intent.nonceDigest,
       intentCreatedAt: intent.createdAt,
     });
-  } catch { return failure(401); }
+  } catch { return handoffFailure(intent.action, completionOrigin); }
   try {
     const grant = await deps.complete({ ...actor, action: intent.action, stateDigest: intent.stateDigest, verifiedSubject: proof.subject });
-    return grant ? success(intent.action, grant.token, completionOrigin) : failure(409);
-  } catch { return failure(503); }
+    return grant ? success(intent.action, grant.token, completionOrigin) : handoffFailure(intent.action, completionOrigin);
+  } catch { return handoffFailure(intent.action, completionOrigin); }
 }
 
 export function isGoogleManagementCallback(request: Request): boolean {

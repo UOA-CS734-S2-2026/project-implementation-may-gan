@@ -18,6 +18,7 @@ import {
 type AcceptedOutcome = "confirmed" | "unknown";
 type GoogleGrant = { action: DeletionAction; token: string };
 type ExpectedGooglePopup = { popup: Window; action: DeletionAction };
+const popupTimeoutMs = 120_000;
 
 function popupName(): string {
   return `dayli-account-deletion-proof-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`;
@@ -34,11 +35,14 @@ export function DeletionPanel({ requestEnabled }: { requestEnabled: boolean }) {
   const [accepted, setAccepted] = useState<AcceptedOutcome>();
   const expectedGooglePopup = useRef<ExpectedGooglePopup | undefined>(undefined);
   const popupMonitor = useRef<number | undefined>(undefined);
+  const popupTimeout = useRef<number | undefined>(undefined);
   const userId = user?.id;
 
   const stopPopupMonitor = () => {
     if (popupMonitor.current !== undefined) window.clearInterval(popupMonitor.current);
+    if (popupTimeout.current !== undefined) window.clearTimeout(popupTimeout.current);
     popupMonitor.current = undefined;
+    popupTimeout.current = undefined;
   };
 
   const refresh = async () => {
@@ -61,13 +65,21 @@ export function DeletionPanel({ requestEnabled }: { requestEnabled: boolean }) {
     const receive = (event: MessageEvent<unknown>) => {
       const expected = expectedGooglePopup.current;
       if (event.origin !== expectedOrigin || event.source !== expected?.popup || !event.data || typeof event.data !== "object") return;
-      const grant = event.data as { type?: unknown; action?: unknown; token?: unknown };
-      if (grant.type !== "dayli.account-management-grant" || grant.action !== expected.action
-        || typeof grant.token !== "string" || !/^[0-9a-f]{64}$/.test(grant.token)) return;
+      const message = event.data as { type?: unknown; action?: unknown; token?: unknown };
+      if (message.action !== expected.action) return;
+      if (message.type === "dayli.account-management-proof-failure") {
+        stopPopupMonitor();
+        expectedGooglePopup.current = undefined;
+        expected.popup.close();
+        setBusy(false);
+        setError("Google verification did not complete. Try again to open a new verification window.");
+        return;
+      }
+      if (message.type !== "dayli.account-management-grant" || typeof message.token !== "string" || !/^[0-9a-f]{64}$/.test(message.token)) return;
       stopPopupMonitor();
       expectedGooglePopup.current = undefined;
       expected.popup.close();
-      setGoogleGrant({ action: expected.action, token: grant.token });
+      setGoogleGrant({ action: expected.action, token: message.token });
       setPassword("");
       setBusy(false);
     };
@@ -147,6 +159,14 @@ export function DeletionPanel({ requestEnabled }: { requestEnabled: boolean }) {
       setBusy(false);
       setError("Google verification was closed. Try again to open a new verification window.");
     }, 250);
+    popupTimeout.current = window.setTimeout(() => {
+      if (expectedGooglePopup.current?.popup !== popup) return;
+      stopPopupMonitor();
+      expectedGooglePopup.current = undefined;
+      popup.close();
+      setBusy(false);
+      setError("Google verification timed out. Try again to open a new verification window.");
+    }, popupTimeoutMs);
     setBusy(true);
     setError(undefined);
     try { popup.location.assign(await beginGoogleDeletionProof(action)); }

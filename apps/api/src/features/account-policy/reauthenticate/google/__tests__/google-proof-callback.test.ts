@@ -57,6 +57,16 @@ const callback = (stateValue = state, code = "one-use-code") => new Request(
   `https://api.example.test/api/auth/callback/google?state=${encodeURIComponent(stateValue)}&code=${encodeURIComponent(code)}`,
 );
 
+async function expectFailureHandoff(response: Response) {
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-type")).toContain("text/html");
+  const body = await response.text();
+  expect(body).toContain('type":"dayli.account-management-proof-failure"');
+  expect(body).toContain('action":"request_deletion"');
+  expect(body).toContain('postMessage(failure,"https://web.example.test")');
+  expect(body).not.toContain("token");
+}
+
 describe("isolated Google management callback", () => {
   it("exchanges and verifies the signed linked subject without invoking a login path", async () => {
     const configured = deps(await signedToken());
@@ -92,6 +102,20 @@ describe("isolated Google management callback", () => {
     expect(configured.claim).not.toHaveBeenCalled();
   });
 
+  it("hands Google denial, invalid callback input, and provider failures back without a grant", async () => {
+    const denied = deps(await signedToken());
+    await expectFailureHandoff(await handleGoogleManagementCallback(new Request(
+      `https://api.example.test/api/auth/callback/google?state=${encodeURIComponent(state)}&error=access_denied`,
+    ), denied));
+    const invalidCode = deps(await signedToken());
+    await expectFailureHandoff(await handleGoogleManagementCallback(callback(state, "invalid code"), invalidCode));
+    const invalidNonce = deps(await signedToken({ nonce: "another-nonce" }));
+    await expectFailureHandoff(await handleGoogleManagementCallback(callback(), invalidNonce));
+    const unavailable = deps(await signedToken());
+    unavailable.exchange = vi.fn(async () => { throw new Error("provider unavailable"); });
+    await expectFailureHandoff(await handleGoogleManagementCallback(callback(), unavailable));
+  });
+
   it("requires the original session and a claimable one-use state", async () => {
     const missing = deps(await signedToken(), null);
     expect((await handleGoogleManagementCallback(callback(), missing)).status).toBe(401);
@@ -107,10 +131,10 @@ describe("isolated Google management callback", () => {
 
   it("never issues a grant for another Google subject or a stale authentication time", async () => {
     const swapped = deps(await signedToken({ subject: "another-google-account" }));
-    expect((await handleGoogleManagementCallback(callback(), swapped)).status).toBe(401);
+    await expectFailureHandoff(await handleGoogleManagementCallback(callback(), swapped));
     expect(swapped.complete).not.toHaveBeenCalled();
     const stale = deps(await signedToken({ authTime: seconds - 400 }));
-    expect((await handleGoogleManagementCallback(callback(), stale)).status).toBe(401);
+    await expectFailureHandoff(await handleGoogleManagementCallback(callback(), stale));
     expect(stale.complete).not.toHaveBeenCalled();
   });
 
