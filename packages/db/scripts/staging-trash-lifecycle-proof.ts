@@ -19,6 +19,18 @@ export type ProofPhase = "configuration" | "migration_ledger" | "restore_fixture
   "guarded_seed" | "scheduled_cleanup" | "complete";
 export type ProofFailureCategory = "configuration_failure" | "migration_ledger_failure" | "normal_api_failure" |
   "guard_failure" | "scheduled_cleanup_failure";
+export type ProofOperation = "none" | "legal_current" | "registration_intent" | "email_signup" |
+  "media_reserve" | "media_upload" | "media_complete" | "posting_day" | "post_create" |
+  "object_pretrash_head" | "post_trash" | "post_hidden_read" | "media_hidden_read" |
+  "trash_list" | "post_restore" | "post_restored_read" | "media_restored_read" |
+  "scheduled_object_head";
+export type ProofGuardType = "transport_failure" | "unexpected_http_status" | "invalid_json" |
+  "invalid_response_contract" | "missing_session_header" | "storage_presence_mismatch";
+export type ProtocolDiagnostic = {
+  operation: ProofOperation;
+  httpStatus: number | null;
+  guardType: ProofGuardType | null;
+};
 type Evidence = {
   targetSha: string;
   deployedSha: string;
@@ -30,6 +42,7 @@ type Evidence = {
   outcome: "passed" | "incomplete";
   phase: ProofPhase;
   failureCategory: ProofFailureCategory | null;
+  protocol: ProtocolDiagnostic;
   checks: Record<string, boolean>;
   counts: Record<string, number>;
 };
@@ -93,27 +106,55 @@ function required(name: string): string {
 }
 
 
-async function api<T>(origin: string, path: string, init: RequestInit = {}, expected = 200): Promise<{ response: Response; body: T }> {
-  const response = await fetch(`${origin}${path}`, init);
-  if (response.status !== expected) throw new Error("A staging API proof step failed.");
-  try { return { response, body: await response.json() as T }; }
-  catch { throw new Error("A staging API proof step returned invalid JSON."); }
+export function createProtocolDiagnostic(): ProtocolDiagnostic {
+  return { operation: "none", httpStatus: null, guardType: null };
 }
 
-async function createAccount(origin: string, marker: string, ordinal: number): Promise<string> {
-  const current = (await api<{ status: string; termsVersionId?: string; termsContentDigest?: string }>(
-    origin, "/api/v1/legal/current",
+function failGuard(diagnostic: ProtocolDiagnostic, guardType: ProofGuardType): never {
+  diagnostic.guardType = guardType;
+  throw new Error("A staging API proof protocol guard failed.");
+}
+
+export async function requestProofJson<T>(
+  diagnostic: ProtocolDiagnostic,
+  operation: ProofOperation,
+  origin: string,
+  path: string,
+  init: RequestInit = {},
+  expected = 200,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ response: Response; body: T }> {
+  diagnostic.operation = operation;
+  diagnostic.httpStatus = null;
+  diagnostic.guardType = null;
+  let response: Response;
+  try { response = await fetchImpl(`${origin}${path}`, init); }
+  catch { return failGuard(diagnostic, "transport_failure"); }
+  diagnostic.httpStatus = response.status;
+  if (response.status !== expected) return failGuard(diagnostic, "unexpected_http_status");
+  try { return { response, body: await response.json() as T }; }
+  catch { return failGuard(diagnostic, "invalid_json"); }
+}
+
+async function createAccount(origin: string, marker: string, ordinal: number, diagnostic: ProtocolDiagnostic): Promise<string> {
+  const current = (await requestProofJson<{ status: string; termsVersionId?: string; termsContentDigest?: string }>(
+    diagnostic, "legal_current", origin, "/api/v1/legal/current",
   )).body;
   if (current.status !== "effective" || typeof current.termsVersionId !== "string" ||
-      typeof current.termsContentDigest !== "string" || !/^[a-f0-9]{64}$/.test(current.termsContentDigest)) throw new Error("Current registration terms are unavailable.");
-  const intent = (await api<{ token: string; binding: string }>(origin, "/api/v1/legal/registration-intent", {
+      typeof current.termsContentDigest !== "string" || !/^[a-f0-9]{64}$/.test(current.termsContentDigest)) {
+    return failGuard(diagnostic, "invalid_response_contract");
+  }
+  const intent = (await requestProofJson<{ token: string; binding: string }>(diagnostic, "registration_intent", origin, "/api/v1/legal/registration-intent", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
       flow: "email", termsVersionId: current.termsVersionId, termsContentDigest: current.termsContentDigest,
       acceptedTermsAndDeclaredAge16: true,
     }),
   })).body;
+  if (!/^[a-f0-9]{64}$/.test(intent.token) || !/^[a-f0-9]{64}$/.test(intent.binding)) {
+    return failGuard(diagnostic, "invalid_response_contract");
+  }
   const suffix = marker.slice(-16);
-  const signup = await api(origin, "/api/auth/sign-up/email", {
+  const signup = await requestProofJson<unknown>(diagnostic, "email_signup", origin, "/api/auth/sign-up/email", {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -128,28 +169,39 @@ async function createAccount(origin: string, marker: string, ordinal: number): P
     }),
   });
   const token = signup.response.headers.get("set-auth-token");
-  if (!token) throw new Error("Synthetic account session was not issued.");
+  if (!token) return failGuard(diagnostic, "missing_session_header");
   return token;
 }
 
-async function createFixture(origin: string, token: string, marker: string, ordinal: number): Promise<Fixture> {
+async function createFixture(origin: string, token: string, marker: string, ordinal: number, diagnostic: ProtocolDiagnostic): Promise<Fixture> {
   const authorization = { authorization: `Bearer ${token}` };
-  const reservation = (await api<{ id: string; upload: { url: string; requiredHeaders: Record<string, string> } }>(
-    origin, "/api/v1/media-reservations", {
+  const reservation = (await requestProofJson<{ id: string; upload: { url: string; method: string; requiredHeaders: Record<string, string> } }>(
+    diagnostic, "media_reserve", origin, "/api/v1/media-reservations", {
     method: "POST", headers: { ...authorization, "content-type": "application/json" },
     body: JSON.stringify({ contentType: "image/jpeg", byteSize: jpeg.byteLength }),
   }, 201)).body;
+  if (!reservation.id || reservation.upload?.method !== "PUT" || !reservation.upload.url ||
+      !reservation.upload.requiredHeaders || typeof reservation.upload.requiredHeaders !== "object") {
+    return failGuard(diagnostic, "invalid_response_contract");
+  }
   const uploadHeaders = new Headers(reservation.upload.requiredHeaders);
-  const upload = await fetch(reservation.upload.url, { method: "PUT", headers: uploadHeaders, body: jpeg });
-  if (!upload.ok) throw new Error("Synthetic media upload failed.");
-  const complete = (await api<{ status: string }>(origin, `/api/v1/media-reservations/${encodeURIComponent(reservation.id)}/complete`, {
+  diagnostic.operation = "media_upload";
+  diagnostic.httpStatus = null;
+  diagnostic.guardType = null;
+  let upload: Response;
+  try { upload = await fetch(reservation.upload.url, { method: "PUT", headers: uploadHeaders, body: jpeg }); }
+  catch { return failGuard(diagnostic, "transport_failure"); }
+  diagnostic.httpStatus = upload.status;
+  if (!upload.ok) return failGuard(diagnostic, "unexpected_http_status");
+  const complete = (await requestProofJson<{ status: string }>(diagnostic, "media_complete", origin, `/api/v1/media-reservations/${encodeURIComponent(reservation.id)}/complete`, {
     method: "POST", headers: authorization,
   })).body;
-  if (complete.status !== "validated") throw new Error("Synthetic media validation failed.");
-  const day = (await api<{ localDate: string; prompt: { id: string } }>(
-    origin, "/api/v1/posting-days/current", { headers: authorization },
+  if (complete.status !== "validated") return failGuard(diagnostic, "invalid_response_contract");
+  const day = (await requestProofJson<{ localDate: string; prompt: { id: string } }>(
+    diagnostic, "posting_day", origin, "/api/v1/posting-days/current", { headers: authorization },
   )).body;
-  const created = (await api<{ id: string; authorId: string; media: Array<{ id: string }> }>(origin, "/api/v1/posts", {
+  if (!day.localDate || !day.prompt?.id) return failGuard(diagnostic, "invalid_response_contract");
+  const created = (await requestProofJson<{ id: string; authorId: string; media: Array<{ id: string }> }>(diagnostic, "post_create", origin, "/api/v1/posts", {
     method: "POST",
     headers: { ...authorization, "content-type": "application/json", "idempotency-key": randomUUID() },
     body: JSON.stringify({
@@ -161,38 +213,42 @@ async function createFixture(origin: string, token: string, marker: string, ordi
       attachments: [reservation.id],
     }),
   }, 201)).body;
-  if (created.media.length !== 1 || !created.media[0]?.id) throw new Error("Synthetic post media was not attached.");
+  if (!created.id || !created.authorId || !Array.isArray(created.media) || created.media.length !== 1 || !created.media[0]?.id) {
+    return failGuard(diagnostic, "invalid_response_contract");
+  }
   const fixture = { ownerId: created.authorId, postId: created.id, mediaId: created.media[0].id,
     reservationId: reservation.id, objectKey: `media/${created.authorId}/${reservation.id}`, generation: 0 };
-  if (await objectIsAbsent(fixture.objectKey)) throw new Error("Synthetic object was absent before Trash.");
+  if (await objectIsAbsent(fixture.objectKey, diagnostic, "object_pretrash_head")) {
+    return failGuard(diagnostic, "storage_presence_mismatch");
+  }
   return fixture;
 }
 
-async function trashFixture(origin: string, token: string, fixture: Fixture): Promise<void> {
-  const trashed = (await api<{ generation: number }>(origin,
+async function trashFixture(origin: string, token: string, fixture: Fixture, diagnostic: ProtocolDiagnostic): Promise<void> {
+  const trashed = (await requestProofJson<{ generation: number }>(diagnostic, "post_trash", origin,
     `/api/v1/posts/${encodeURIComponent(fixture.postId)}/trash`, {
       method: "POST", headers: { authorization: `Bearer ${token}` },
     })).body;
   if (!Number.isSafeInteger(trashed.generation) || trashed.generation < 1) {
-    throw new Error("Synthetic Trash generation is invalid.");
+    return failGuard(diagnostic, "invalid_response_contract");
   }
   fixture.generation = trashed.generation;
 }
 
-async function proveAndRestore(origin: string, token: string, fixture: Fixture): Promise<void> {
+async function proveAndRestore(origin: string, token: string, fixture: Fixture, diagnostic: ProtocolDiagnostic): Promise<void> {
   const headers = { authorization: `Bearer ${token}` };
-  await api(origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}`, { headers }, 404);
-  await api(origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}/media/${encodeURIComponent(fixture.mediaId)}`, { headers }, 404);
-  const list = (await api<{ posts: Array<{ id?: string }> }>(origin, "/api/v1/posts/trash", { headers })).body;
+  await requestProofJson(diagnostic, "post_hidden_read", origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}`, { headers }, 404);
+  await requestProofJson(diagnostic, "media_hidden_read", origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}/media/${encodeURIComponent(fixture.mediaId)}`, { headers }, 404);
+  const list = (await requestProofJson<{ posts: Array<{ id?: string }> }>(diagnostic, "trash_list", origin, "/api/v1/posts/trash", { headers })).body;
   if (!Array.isArray(list.posts) || !list.posts.some((post) => post.id === fixture.postId)) {
-    throw new Error("Synthetic Trash list proof failed.");
+    return failGuard(diagnostic, "invalid_response_contract");
   }
-  const restored = (await api<{ status: string }>(origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}/restore`, {
+  const restored = (await requestProofJson<{ status: string }>(diagnostic, "post_restore", origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}/restore`, {
     method: "POST", headers,
   })).body;
-  if (restored.status !== "restored") throw new Error("Synthetic Trash restore proof failed.");
-  await api(origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}`, { headers });
-  await api(origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}/media/${encodeURIComponent(fixture.mediaId)}`, { headers });
+  if (restored.status !== "restored") return failGuard(diagnostic, "invalid_response_contract");
+  await requestProofJson(diagnostic, "post_restored_read", origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}`, { headers });
+  await requestProofJson(diagnostic, "media_restored_read", origin, `/api/v1/posts/${encodeURIComponent(fixture.postId)}/media/${encodeURIComponent(fixture.mediaId)}`, { headers });
 }
 
 export async function seedPastDeadline(tx: TransactionSql, input: Fixture & { marker: string }): Promise<string> {
@@ -256,7 +312,8 @@ async function absentCounts(sql: Database, fixture: Fixture): Promise<{ post: nu
   return { post: Number(row?.post_count), media: Number(row?.media_count), reservation: Number(row?.reservation_count) };
 }
 
-async function objectIsAbsent(objectKey: string): Promise<boolean> {
+async function objectIsAbsent(objectKey: string, diagnostic?: ProtocolDiagnostic,
+  operation: ProofOperation = "scheduled_object_head"): Promise<boolean> {
   const account = required("CLOUDFLARE_ACCOUNT_ID");
   const bucket = required("STAGING_R2_BUCKET_NAME");
   const client = new AwsClient({
@@ -264,19 +321,34 @@ async function objectIsAbsent(objectKey: string): Promise<boolean> {
     service: "s3", region: "auto",
   });
   const key = objectKey.split("/").map(encodeURIComponent).join("/");
-  const response = await client.fetch(`https://${account}.r2.cloudflarestorage.com/${encodeURIComponent(bucket)}/${key}`, { method: "HEAD" });
+  if (diagnostic) {
+    diagnostic.operation = operation;
+    diagnostic.httpStatus = null;
+    diagnostic.guardType = null;
+  }
+  let response: Response;
+  try {
+    response = await client.fetch(`https://${account}.r2.cloudflarestorage.com/${encodeURIComponent(bucket)}/${key}`, { method: "HEAD" });
+  } catch (error) {
+    if (diagnostic) return failGuard(diagnostic, "transport_failure");
+    throw error;
+  }
+  if (diagnostic) diagnostic.httpStatus = response.status;
   if (response.status === 404) return true;
-  if (!response.ok) throw new Error("Synthetic object HEAD failed.");
+  if (!response.ok) {
+    if (diagnostic) return failGuard(diagnostic, "unexpected_http_status");
+    throw new Error("Synthetic object HEAD failed.");
+  }
   return false;
 }
 
-async function awaitScheduledWorker(sql: Database, fixture: Fixture): Promise<{ counts: { post: number; media: number; reservation: number }; objectAbsent: boolean }> {
+async function awaitScheduledWorker(sql: Database, fixture: Fixture, diagnostic: ProtocolDiagnostic): Promise<{ counts: { post: number; media: number; reservation: number }; objectAbsent: boolean }> {
   const deadline = Date.now() + 9 * 60_000;
   let counts = { post: 1, media: 1, reservation: 1 };
   let objectAbsent = false;
   do {
     counts = await absentCounts(sql, fixture);
-    objectAbsent = await objectIsAbsent(fixture.objectKey);
+    objectAbsent = await objectIsAbsent(fixture.objectKey, diagnostic);
     if (counts.post === 0 && counts.media === 0 && counts.reservation === 0 && objectAbsent) return { counts, objectAbsent };
     await delay(15_000);
   } while (Date.now() < deadline);
@@ -301,6 +373,7 @@ async function run(): Promise<void> {
     runDigest: digest(`${required("GITHUB_RUN_ID")}:${required("GITHUB_RUN_ATTEMPT")}:${targetSha}`),
     markerDigest: digest(marker), acceleratedSyntheticProof: true, startedAt, finishedAt: startedAt,
     outcome: "incomplete", phase: "configuration", failureCategory: null,
+    protocol: createProtocolDiagnostic(),
     checks: { revisionAttested: true, metadataPreflight: true, migrationLedger: false, restore: false,
       guardedSeed: false, databaseAbsent: false, objectAbsent: false },
     counts: { migrations: 0, postsRemaining: -1, mediaRemaining: -1, reservationsRemaining: -1 },
@@ -319,20 +392,20 @@ async function run(): Promise<void> {
       webOrigin: required("STAGING_AUTH_WEB_ORIGIN"),
     });
     evidence.phase = "restore_fixture";
-    const restoreToken = await createAccount(origin, marker, 1);
-    const restoreFixture = await createFixture(origin, restoreToken, marker, 1);
-    await trashFixture(origin, restoreToken, restoreFixture);
-    await proveAndRestore(origin, restoreToken, restoreFixture);
+    const restoreToken = await createAccount(origin, marker, 1, evidence.protocol);
+    const restoreFixture = await createFixture(origin, restoreToken, marker, 1, evidence.protocol);
+    await trashFixture(origin, restoreToken, restoreFixture, evidence.protocol);
+    await proveAndRestore(origin, restoreToken, restoreFixture, evidence.protocol);
     evidence.checks.restore = true;
     evidence.phase = "purge_fixture";
-    const purgeToken = await createAccount(origin, marker, 2);
-    const purgeFixture = await createFixture(origin, purgeToken, marker, 2);
-    await trashFixture(origin, purgeToken, purgeFixture);
+    const purgeToken = await createAccount(origin, marker, 2, evidence.protocol);
+    const purgeFixture = await createFixture(origin, purgeToken, marker, 2, evidence.protocol);
+    await trashFixture(origin, purgeToken, purgeFixture, evidence.protocol);
     evidence.phase = "guarded_seed";
     purgeFixture.objectKey = await sql.begin((tx) => seedPastDeadline(tx, { ...purgeFixture, marker }));
     evidence.checks.guardedSeed = true;
     evidence.phase = "scheduled_cleanup";
-    const result = await awaitScheduledWorker(sql, purgeFixture);
+    const result = await awaitScheduledWorker(sql, purgeFixture, evidence.protocol);
     evidence.counts.postsRemaining = result.counts.post;
     evidence.counts.mediaRemaining = result.counts.media;
     evidence.counts.reservationsRemaining = result.counts.reservation;

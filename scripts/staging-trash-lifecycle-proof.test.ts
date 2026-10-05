@@ -4,7 +4,9 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   classifyProofFailure,
+  createProtocolDiagnostic,
   discoverExpectedMigrationLedger,
+  requestProofJson,
   validateMarker,
   validateProofTarget,
 } from "../packages/db/scripts/staging-trash-lifecycle-proof";
@@ -105,6 +107,30 @@ test("discovers the exact migration ledger from repository and package working d
   }
 });
 
+test("records only fixed operation, numeric status, and guard categories for protocol failures", async () => {
+  const diagnostic = createProtocolDiagnostic();
+  const accepted = await requestProofJson<{ status: string }>(diagnostic, "legal_current", "https://api.example.test",
+    "/api/v1/legal/current", {}, 200, async (input) => {
+      assert.equal(input, "https://api.example.test/api/v1/legal/current");
+      return Response.json({ status: "effective" });
+    });
+  assert.deepEqual(accepted.body, { status: "effective" });
+  assert.deepEqual(diagnostic, { operation: "legal_current", httpStatus: 200, guardType: null });
+
+  await assert.rejects(requestProofJson(diagnostic, "media_complete", "https://api.example.test", "/complete", {}, 200,
+    async () => Response.json({ private: "not-recorded" }, { status: 409 })));
+  assert.deepEqual(diagnostic, { operation: "media_complete", httpStatus: 409, guardType: "unexpected_http_status" });
+
+  await assert.rejects(requestProofJson(diagnostic, "post_create", "https://api.example.test", "/posts", {}, 201,
+    async () => new Response("not-json", { status: 201 })));
+  assert.deepEqual(diagnostic, { operation: "post_create", httpStatus: 201, guardType: "invalid_json" });
+
+  await assert.rejects(requestProofJson(diagnostic, "media_upload", "https://api.example.test", "/upload", {}, 200,
+    async () => { throw new Error("credential-like-private-detail"); }));
+  assert.deepEqual(diagnostic, { operation: "media_upload", httpStatus: null, guardType: "transport_failure" });
+  assert.doesNotMatch(JSON.stringify(diagnostic), /private|credential|detail/);
+});
+
 test("maps proof phases to sanitized failure categories", () => {
   assert.equal(classifyProofFailure("configuration"), "configuration_failure");
   assert.equal(classifyProofFailure("migration_ledger"), "migration_ledger_failure");
@@ -140,8 +166,8 @@ test("proof uses normal API media lifecycle and never invokes cleanup or object 
   assert.doesNotMatch(proof, /claim_post_trash_cleanup|complete_post_trash_cleanup|reschedule_post_trash_cleanup/);
   assert.doesNotMatch(proof, /\bdelete\s+from\b|method:\s*["']DELETE["']|\.delete\s*\(/i);
   assert.match(proof, /method: "HEAD"/);
-  assert.match(proof, /Synthetic object was absent before Trash/);
-  assert.ok(proof.indexOf("objectIsAbsent(fixture.objectKey)") < proof.indexOf("async function trashFixture"));
+  assert.match(proof, /storage_presence_mismatch/);
+  assert.ok(proof.indexOf("objectIsAbsent(fixture.objectKey, diagnostic") < proof.indexOf("async function trashFixture"));
   assert.match(proof, /response\.status === 404/);
 });
 
@@ -151,6 +177,7 @@ test("logs and evidence remain sanitized and failures preserve exact fixtures", 
   assert.match(proof, /markerDigest/);
   assert.match(proof, /phase: ProofPhase/);
   assert.match(proof, /failureCategory: ProofFailureCategory \| null/);
+  assert.match(proof, /protocol: ProtocolDiagnostic/);
   assert.doesNotMatch(proof, /JSON\.stringify\(evidence[^\n]*(owner|post|reservation|email|token|object)/i);
   assert.match(workflow, /if: always\(\)/);
 });
