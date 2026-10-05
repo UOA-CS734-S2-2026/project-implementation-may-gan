@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useSession } from "@/lib/session/hooks";
-import { getUsernameProfile } from "@/lib/profile/username";
 import { LegalDraftMarker, LegalLinks } from "@/components/legal/LegalLinks";
 
 import GallerySquiggle1 from "@/assets/GallerySquiggle01";
@@ -16,14 +15,19 @@ export default function App() {
   const router = useRouter();
   const { user } = useSession();
 
-  // The session lives on the API origin, so this client-only check must avoid
-  // rendering the public landing screen while an authenticated account is pending setup.
+  // The main layout checks legal acceptance before ordinary profile access.
   useEffect(() => {
-    if (!user) return;
-    void getUsernameProfile().then((profile) => router.replace(profile.needsUsernameSetup ? "/setup-username" : "/home"));
+    if (user) router.replace("/home");
   }, [router, user]);
 
-  if (user) return null;
+  if (user) return (
+    <main className="grid min-h-screen place-items-center">
+      <div>
+        <p role="status">Opening your account...</p>
+        <Link href="/home">Continue to Dayli</Link>
+      </div>
+    </main>
+  );
 
   return (
     <main className="overflow-hidden relative min-h-screen">
