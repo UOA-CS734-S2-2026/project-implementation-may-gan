@@ -92,7 +92,9 @@ class SessionController extends ChangeNotifier {
     this.onBeforeSessionReplacement,
     this.onSignedIn,
     this.clearUserMedia,
-  });
+    PublicReturnIntentRegistry? publicReturnIntents,
+  }) : _publicReturnIntents =
+           publicReturnIntents ?? PublicReturnIntentRegistry();
 
   final BetterAuthNativeSession _session;
   final SessionTokenStore _tokenStore;
@@ -120,8 +122,7 @@ class SessionController extends ChangeNotifier {
   String? _startedSessionUserId;
   int _sessionGeneration = 0;
   Future<void>? _policyRefresh;
-  final PublicReturnIntentRegistry _publicReturnIntents =
-      PublicReturnIntentRegistry();
+  final PublicReturnIntentRegistry _publicReturnIntents;
 
   SessionStatus get status => _status;
   SessionUser? get user => _user;

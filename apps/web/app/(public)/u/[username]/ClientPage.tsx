@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { acceptFriendRequest, cancelFriendRequest, getRelationship, loadSocialProfile, removeFriend, sendFriendRequest, type FriendsResult } from "@/lib/api/friends";
@@ -13,7 +13,7 @@ import { ProfileAbout } from "@/features/profiles/get-profile-details/ProfileAbo
 import { Button } from "@/components/ui/core/Button";
 import { ProfileAvatar } from "@/features/profiles/update-profile/AvatarForm";
 import { useSession } from "@/lib/session/hooks";
-import { isPublicAction, rememberPublicIntent, resumePublicIntent, signInForPublicAction, withPublicAction, type PublicAction } from "@/lib/routing/public-return-intent";
+import { consumePublicIntent, isPublicAction, rememberPublicIntent, resumePublicIntent, signInForPublicAction, withPublicAction, type PublicAction } from "@/lib/routing/public-return-intent";
 import { profileKeys } from "@/features/profiles/shared/profiles.keys";
 import { ProfileActions } from "./_components/ProfileActions";
 
@@ -38,20 +38,49 @@ export function Profile({ username: requested }: { username: string }) {
   const moved = Boolean(handle && handle.toLowerCase() !== requested.toLowerCase());
   const rawIntent = searchParams.get("intent");
   const candidateIntent = isPublicAction(rawIntent) && (rawIntent === "friend-request" || rawIntent === "message-request") ? rawIntent : null;
-  const intent = !sessionPending && candidateIntent && user && resumePublicIntent(`${pathname}?intent=${candidateIntent}`, user.id)
-    ? candidateIntent
-    : null;
+  const [intent, setIntent] = useState<"friend-request" | "message-request" | null>(null);
+  const presentedTarget = useRef<string | null>(null);
   useEffect(() => {
-    if (rawIntent && !sessionPending && !intent) router.replace(pathname);
-  }, [intent, pathname, rawIntent, router, sessionPending]);
-  useEffect(() => {
-    if (moved && handle) router.replace(`/u/${encodeURIComponent(handle)}${intent ? `?intent=${intent}` : ""}`);
-  }, [handle, intent, moved, router]);
-  useEffect(() => {
-    if (user && intent && details.isSuccess) void details.refetch();
-    // Refetch once after the initial authenticated response settles.
+    if (!rawIntent) {
+      presentedTarget.current = null;
+      return;
+    }
+    if (sessionPending) return;
+    if (!candidateIntent || !user) {
+      queueMicrotask(() => setIntent(null));
+      router.replace(pathname);
+      return;
+    }
+    const target = `${pathname}?intent=${candidateIntent}`;
+    if (presentedTarget.current === target) {
+      router.replace(pathname);
+      return;
+    }
+    if (!details.isSuccess || !resumePublicIntent(target, user.id)) {
+      if (details.isSuccess) {
+        queueMicrotask(() => setIntent(null));
+        router.replace(pathname);
+      }
+      return;
+    }
+    let current = true;
+    void details.refetch().then((result) => {
+      if (!current) return;
+      if (result.status === "success" && consumePublicIntent(target, user.id)) {
+        presentedTarget.current = target;
+        setIntent(candidateIntent);
+      } else {
+        setIntent(null);
+      }
+      router.replace(pathname);
+    });
+    return () => { current = false; };
+    // Refetch exactly once before consuming the trusted handoff.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [details.isSuccess, intent, user?.id]);
+  }, [candidateIntent, details.isSuccess, pathname, rawIntent, router, sessionPending, user?.id]);
+  useEffect(() => {
+    if (moved && handle) router.replace(`/u/${encodeURIComponent(handle)}`);
+  }, [handle, moved, router]);
 
   const social = useQuery({
     queryKey: ["social-profile", user?.id, handle],

@@ -1,10 +1,88 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Browser, type Page, type TestInfo } from "@playwright/test";
 
 // Creating two accounts and loading multiple contexts can cold-start slowly on hosted runners.
 test.setTimeout(120_000);
+
+function database(query: string): string {
+  return execFileSync("docker", ["exec", process.env.E2E_POSTGRES_CONTAINER!, "psql", "-At", "-U", "postgres", "-d", "dayli_test", "-c", query], { encoding: "utf8" }).trim();
+}
+
+async function signUp(page: Page, username: string, email: string, password: string, publicName: string) {
+  const fixtureOctet = 20 + [...username].reduce((sum, character) => sum + character.charCodeAt(0), 0) % 200;
+  const response = await page.request.post(`${process.env.E2E_API_ORIGIN}/api/auth/sign-up/email`, {
+    headers: { "cf-connecting-ip": `198.51.100.${fixtureOctet}` },
+    data: { name: publicName, username, displayUsername: publicName, email, password },
+  });
+  expect(response.status()).toBe(200);
+  await page.goto("/home");
+  await expect(page).toHaveURL(/\/home$/);
+}
+
+async function setupIntentFixture(browser: Browser, authorPage: Page, testInfo: TestInfo, activeFriends: boolean) {
+  database('delete from "rateLimit"');
+  const suffix = `${testInfo.project.name}-${testInfo.title}-${Date.now()}`.replace(/[^a-z0-9]/gi, "").toLowerCase().slice(-16);
+  const author = `ia${suffix}`;
+  const viewer = `iv${suffix}`;
+  const password = "e2e-password-123";
+  const authorEmail = `${author}@example.test`;
+  const viewerEmail = `${viewer}@example.test`;
+  await signUp(authorPage, author, authorEmail, password, "Intent Author");
+  await authorPage.goto("/settings");
+  const visibility = authorPage.getByRole("switch", { name: "Private profile" });
+  if (await visibility.getAttribute("aria-checked") === "true") await visibility.click();
+  await expect(visibility).toHaveAttribute("aria-checked", "false");
+  const postId = await authorPage.evaluate(async (api) => {
+    const dayResponse = await fetch(`${api}/api/v1/posting-days/current`, { credentials: "include" });
+    const day = await dayResponse.json() as { localDate: string; prompt: { id: string } };
+    const response = await fetch(`${api}/api/v1/posts`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() },
+      body: JSON.stringify({ localDate: day.localDate, promptId: day.prompt.id, reflectiveAnswer: "Intent target dayli.", rating: 8, audience: "friends" }),
+    });
+    return ((await response.json()) as { id: string }).id;
+  }, process.env.E2E_API_ORIGIN!);
+  database(`update posts set accepted_at = now() - interval '2 days', released_at = now() - interval '1 day' where id = '${postId}'`);
+
+  const setup = await browser.newContext();
+  const setupPage = await setup.newPage();
+  await signUp(setupPage, viewer, viewerEmail, password, "Intent Viewer");
+  await setup.close();
+  const authorId = database(`select id from \"user\" where username = '${author}'`);
+  database(`update \"user\" set profile_visibility = 'public' where id = '${authorId}'`);
+  const viewerId = database(`select id from \"user\" where username = '${viewer}'`);
+  if (activeFriends) database(`insert into friendships (user_id, friend_id, state, state_changed_at) values ('${authorId}', '${viewerId}', 'active', now()), ('${viewerId}', '${authorId}', 'active', now())`);
+  await authorPage.request.post(`${process.env.E2E_API_ORIGIN}/api/auth/sign-out`);
+  const visitorContext = authorPage.context();
+  await visitorContext.clearCookies();
+  await authorPage.close();
+  const visitorPage = await visitorContext.newPage();
+  return {
+    author, viewer, viewerEmail, password, postId, authorId, viewerId,
+    anonymous: { close: async () => { await visitorPage.close(); } },
+    page: visitorPage,
+  };
+}
+
+async function signInFromIntent(page: Page, email: string, password: string, cleanPath: RegExp) {
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page).toHaveURL(cleanPath);
+}
+
+async function proveConsumed(page: Page, rawTarget: string, notice: RegExp, count: () => number) {
+  const before = count();
+  await page.reload();
+  await page.goBack();
+  await page.goForward();
+  await page.goto(rawTarget);
+  await expect(page.getByText(notice)).toHaveCount(0);
+  expect(count()).toBe(before);
+}
 
 test("an anonymous visitor can browse a synthetic public profile and safely return from sign-in", async ({ browser, page }, testInfo) => {
   const suffix = `${testInfo.project.name}-${Date.now()}`.replace(/[^a-z0-9]/gi, "").toLowerCase().slice(-18);
@@ -142,7 +220,7 @@ test("an anonymous visitor can browse a synthetic public profile and safely retu
   await visitor.getByLabel("Email").fill(secondEmail);
   await visitor.getByLabel("Password").fill(password);
   await visitor.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(visitor).toHaveURL(new RegExp(`/u/${username}\\?intent=friend-request$`));
+  await expect(visitor).toHaveURL(new RegExp(`/u/${username}$`));
   await expect(visitor.getByText(/Review this profile/)).toBeVisible();
   const authorId = await page.evaluate(async (api) => {
     const response = await fetch(`${api}/api/auth/get-session`, { credentials: "include" });
@@ -215,14 +293,20 @@ test("an anonymous visitor can browse a synthetic public profile and safely retu
     sessionStorage.setItem(`dayli:public-intent:${target}`, JSON.stringify({ issuedAt: Date.now(), actorId }));
   }, { target: messageTarget, actorId: secondActorId });
   await visitor.goto(messageTarget);
-  await expect(visitor).toHaveURL(new RegExp(`/u/${username}\\?intent=message-request$`));
+  await expect(visitor).toHaveURL(new RegExp(`/u/${username}$`));
   await expect(visitor.getByText(/Review this profile/)).toBeVisible();
+
+  const restrictedContext = await browser.newContext();
+  const restrictedVisitor = await restrictedContext.newPage();
+  await restrictedVisitor.goto(`/u/${username}/${postId}`);
+  await expect(restrictedVisitor.getByText("Synthetic released public dayli.")).toBeVisible();
+  expect((await restrictedVisitor.request.get(publicPost.media[0]!.url)).status()).toBe(200);
 
   if (await visibility.getAttribute("aria-checked") === "false") await visibility.click();
   await expect(visibility).toHaveAttribute("aria-checked", "true");
 
-  const restrictedContext = await browser.newContext();
-  const restrictedVisitor = await restrictedContext.newPage();
+  await restrictedVisitor.reload();
+  await expect(restrictedVisitor.getByText("Synthetic released public dayli.")).toHaveCount(0);
   await restrictedVisitor.goto(`/u/${username}`);
   await expect(restrictedVisitor.getByText("This profile is private.")).toBeVisible();
   await expect(restrictedVisitor.getByRole("heading", { name: "Public E2E" })).toHaveCount(0);
@@ -268,16 +352,97 @@ test("an anonymous visitor can browse a synthetic public profile and safely retu
   expect(unblocked).toBe(200);
   if (await visibility.getAttribute("aria-checked") === "true") await visibility.click();
   await expect(visibility).toHaveAttribute("aria-checked", "false");
+  await restrictedVisitor.goto(`/u/${username}/${postId}`);
+  await expect(restrictedVisitor.getByText("Synthetic released public dayli.")).toBeVisible();
+  expect((await restrictedVisitor.request.get(publicPost.media[0]!.url)).status()).toBe(200);
   const trashed = await page.evaluate(async ({ api, id }) => fetch(`${api}/api/v1/posts/${id}/trash`, { method: "POST", credentials: "include" }).then((response) => response.status), { api: apiOrigin, id: postId });
   expect(trashed).toBe(200);
   for (const url of [`${apiOrigin}/api/v1/posts/${postId}`, publicPost.media[0]!.url]) {
     expect((await restrictedVisitor.request.get(url)).status()).toBe(404);
   }
-  await restrictedVisitor.goto(`/u/${username}/${postId}`);
+  await restrictedVisitor.reload();
   await expect(restrictedVisitor.getByText("Synthetic released public dayli.")).toHaveCount(0);
   await restrictedVisitor.goBack();
   await restrictedVisitor.goForward();
   expect(await restrictedVisitor.locator("body").innerText()).not.toContain("Synthetic released public dayli.");
 
   await Promise.all([anonymous.close(), restrictedContext.close()]);
+});
+
+test("friend intent signs in, refetches, and mutates only after confirmation", async ({ browser, page }, testInfo) => {
+  const fixture = await setupIntentFixture(browser, page, testInfo, false);
+  const raw = `/u/${fixture.author}?intent=friend-request`;
+  const requests = () => Number(database(`select count(*) from friend_requests where sender_id = '${fixture.viewerId}' and recipient_id = '${fixture.authorId}'`));
+  expect((await fixture.page.request.get(`${process.env.E2E_API_ORIGIN}/api/v1/profiles/${fixture.author}`)).status()).toBe(200);
+  await fixture.page.goto(`/u/${fixture.author}`);
+  await fixture.page.getByRole("link", { name: "add friend" }).click();
+  await signInFromIntent(fixture.page, fixture.viewerEmail, fixture.password, new RegExp(`/u/${fixture.author}$`));
+  await expect(fixture.page.getByText(/Review this profile/)).toBeVisible();
+  expect(requests()).toBe(0);
+  await fixture.page.getByRole("button", { name: "add friend" }).click();
+  await expect.poll(requests).toBe(1);
+  await proveConsumed(fixture.page, raw, /Review this profile/, requests);
+  await fixture.anonymous.close();
+});
+
+test("message intent signs in and creates one request only after send", async ({ browser, page }, testInfo) => {
+  const fixture = await setupIntentFixture(browser, page, testInfo, false);
+  const raw = `/u/${fixture.author}?intent=message-request`;
+  const conversations = () => Number(database(`select count(*) from conversations where user_low_id = least('${fixture.authorId}', '${fixture.viewerId}') and user_high_id = greatest('${fixture.authorId}', '${fixture.viewerId}')`));
+  await fixture.page.goto(`/u/${fixture.author}`);
+  await fixture.page.getByRole("link", { name: "message" }).click();
+  await signInFromIntent(fixture.page, fixture.viewerEmail, fixture.password, new RegExp(`/u/${fixture.author}$`));
+  await expect(fixture.page.getByText(/Review this profile/)).toBeVisible();
+  expect(conversations()).toBe(0);
+  await fixture.page.getByRole("link", { name: "message", exact: true }).click();
+  expect(conversations()).toBe(0);
+  await fixture.page.getByRole("textbox", { name: "Message" }).fill("Explicit message request.");
+  await fixture.page.getByRole("button", { name: "send", exact: true }).click();
+  await expect.poll(conversations).toBe(1);
+  await fixture.page.goto(raw);
+  await expect(fixture.page.getByText(/Review this profile/)).toHaveCount(0);
+  expect(conversations()).toBe(1);
+  await fixture.anonymous.close();
+});
+
+test("like intent signs in and writes exactly once after an explicit click", async ({ browser, page }, testInfo) => {
+  const fixture = await setupIntentFixture(browser, page, testInfo, true);
+  const path = `/u/${fixture.author}/${fixture.postId}`;
+  const raw = `${path}?intent=like`;
+  const likes = () => Number(database(`select count(*) from post_likes where post_id = '${fixture.postId}' and user_id = '${fixture.viewerId}'`));
+  await fixture.page.goto(path);
+  await fixture.page.getByRole("link", { name: "like" }).click();
+  await signInFromIntent(fixture.page, fixture.viewerEmail, fixture.password, new RegExp(`${path}$`));
+  expect(likes()).toBe(0);
+  await fixture.page.getByRole("button", { name: "Like" }).click();
+  await expect.poll(likes).toBe(1);
+  await fixture.page.reload();
+  await fixture.page.goBack();
+  await fixture.page.goForward();
+  await fixture.page.goto(raw);
+  expect(likes()).toBe(1);
+  await fixture.anonymous.close();
+});
+
+test("comment intent signs in, focuses once, and posts exactly once after send", async ({ browser, page }, testInfo) => {
+  const fixture = await setupIntentFixture(browser, page, testInfo, true);
+  const path = `/u/${fixture.author}/${fixture.postId}`;
+  const raw = `${path}?intent=comment`;
+  const comments = () => Number(database(`select count(*) from post_comments where post_id = '${fixture.postId}' and author_id = '${fixture.viewerId}' and deleted_at is null`));
+  await fixture.page.goto(path);
+  await fixture.page.getByRole("link", { name: "comment" }).click();
+  await signInFromIntent(fixture.page, fixture.viewerEmail, fixture.password, new RegExp(`${path}$`));
+  const composer = fixture.page.getByRole("textbox", { name: "Add a comment" });
+  await expect(composer).toBeFocused();
+  expect(comments()).toBe(0);
+  await composer.fill("Explicit returned comment.");
+  await fixture.page.getByRole("button", { name: "Post", exact: true }).click();
+  await expect.poll(comments).toBe(1);
+  await fixture.page.reload();
+  await fixture.page.goBack();
+  await fixture.page.goForward();
+  await fixture.page.goto(raw);
+  await expect(composer).not.toBeFocused();
+  expect(comments()).toBe(1);
+  await fixture.anonymous.close();
 });

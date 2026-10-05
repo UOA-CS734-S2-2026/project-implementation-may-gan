@@ -6,7 +6,8 @@ set -Eeuo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 compose_file="$repo_root/packages/db/docker-compose.yml"
-compose_project="${DPP005_COMPOSE_PROJECT:-dpp005}"
+suffix="$(openssl rand -hex 6)"
+compose_project="${DPP005_COMPOSE_PROJECT:-dpp005-${PPID}-${suffix}}"
 temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/dayli-mobile-dpp005.XXXXXX")"
 api_log="$temporary_dir/api.log"
 media_log="$temporary_dir/media.log"
@@ -17,13 +18,13 @@ find_free_port() {
   node -e 'const server = require("node:net").createServer(); server.listen(0, "127.0.0.1", () => { console.log(server.address().port); server.close(); });'
 }
 
-postgres_port="${DPP005_POSTGRES_PORT:-55442}"
+postgres_port="${DPP005_POSTGRES_PORT:-$(find_free_port)}"
 api_port="$(find_free_port)"
 media_port="$(find_free_port)"
 host_api_origin="https://localhost:${api_port}"
+echo "DPP-005 fixture project=${compose_project} postgres_port=${postgres_port} api_port=${api_port} media_port=${media_port}"
 device_api_origin="https://10.0.2.2:${api_port}"
 device_id="${DPP004_DEVICE_ID:-}"
-suffix="$(openssl rand -hex 6)"
 public_username="dpp_public_${suffix}"
 private_username="dpp_private_${suffix}"
 viewer_username="dpp_viewer_${suffix}"
@@ -35,6 +36,8 @@ second_viewer_email="${second_viewer_username}@example.test"
 viewer_password="$(openssl rand -hex 18)"
 second_viewer_password="$(openssl rand -hex 18)"
 fixture_password="$(openssl rand -hex 18)"
+replay_intent_id="$(openssl rand -hex 24)"
+replay_issued_at="$(node -e 'process.stdout.write(String(Date.now()))')"
 public_post_id="dpp-post-${suffix}"
 public_media_id="dpp-media-${suffix}"
 private_post_id="dpp-private-post-${suffix}"
@@ -315,13 +318,19 @@ export DPP004_PRIVATE_POST_ID="$private_post_id"
 export DPP005_SOLO_POST_ID="$solo_post_id"
 export DPP005_UNRELEASED_POST_ID="$unreleased_post_id"
 export DPP004_AUTHOR_TOKEN="$author_token"
+export DPP005_AUTHOR_EMAIL="$public_email"
+export DPP005_AUTHOR_PASSWORD="$fixture_password"
 export DPP004_VIEWER_EMAIL="$viewer_email"
 export DPP004_VIEWER_PASSWORD="$viewer_password"
 export DPP004_VIEWER_TOKEN="$viewer_token"
 export DPP004_EXPIRED_TOKEN="$public_token"
 export DPP004_SECOND_VIEWER_TOKEN="$second_viewer_token"
+export DPP005_SECOND_VIEWER_EMAIL="$second_viewer_email"
+export DPP005_SECOND_VIEWER_PASSWORD="$second_viewer_password"
 export DPP004_CA_PEM_B64="$(base64 < "$certificate" | tr -d '\n')"
 export DPP005_CONFLICT_POST_ID="$conflict_post_id"
+export DPP005_REPLAY_INTENT_ID="$replay_intent_id"
+export DPP005_REPLAY_ISSUED_AT="$replay_issued_at"
 node >"$defines" <<'NODE'
 const fs = require('node:fs');
 const keys = [
@@ -333,21 +342,61 @@ const keys = [
   'DPP005_SOLO_POST_ID',
   'DPP005_UNRELEASED_POST_ID',
   'DPP004_AUTHOR_TOKEN',
+  'DPP005_AUTHOR_EMAIL',
+  'DPP005_AUTHOR_PASSWORD',
   'DPP004_VIEWER_EMAIL',
   'DPP004_VIEWER_PASSWORD',
   'DPP004_VIEWER_TOKEN',
   'DPP004_EXPIRED_TOKEN',
   'DPP004_SECOND_VIEWER_TOKEN',
+  'DPP005_SECOND_VIEWER_EMAIL',
+  'DPP005_SECOND_VIEWER_PASSWORD',
   'DPP004_CA_PEM_B64',
   'DPP005_CONFLICT_POST_ID',
+  'DPP005_REPLAY_INTENT_ID',
+  'DPP005_REPLAY_ISSUED_AT',
 ];
 fs.writeFileSync(1, JSON.stringify(Object.fromEntries(keys.map(key => [key, process.env[key]]))));
 NODE
 
-echo 'Running DPP-005 public-profile journeys on the Android emulator'
+echo 'Running isolated DPP-005 authentication journeys on the Android emulator'
 cd "$repo_root/apps/mobile"
+clear_auth_limits() {
+  docker compose -p "$compose_project" -f "$compose_file" exec -T postgres \
+    psql -U postgres -d dayli_test -c 'delete from "rateLimit"' >/dev/null
+}
+run_public_case() {
+  local name="$1"
+  clear_auth_limits
+  flutter test integration_test/public_profiles_real_test.dart \
+    -d "$device_id" --dart-define-from-file="$defines" --plain-name "$name"
+}
+run_public_case 'password sign-in returns to like intent and writes only after confirmation'
+run_public_case 'password sign-in returns to friend intent without sending until tapped'
+run_public_case 'password sign-in returns to message intent and sends exactly once'
+run_public_case 'password sign-in returns to comment intent and posts only after send'
+run_public_case 'consumes the externally recorded native return URL after real sign-in'
+run_public_case 'failed sign-in keeps a message intent inert until verified authentication'
+
+clear_auth_limits
+echo 'Cold restarting Android for the non-authentication lifecycle matrix and replay proof'
 flutter test integration_test/public_profiles_real_test.dart \
-  -d "$device_id" --dart-define-from-file="$defines"
+  -d "$device_id" --dart-define-from-file="$defines" \
+  --name '^(?!password sign-in|consumes the externally recorded|failed sign-in).*$'
+
+assert_count() {
+  local label="$1" query="$2"
+  local actual
+  actual="$(docker compose -p "$compose_project" -f "$compose_file" exec -T postgres psql -At -U postgres -d dayli_test -c "$query")"
+  if [[ "$actual" != "1" ]]; then
+    echo "Expected exactly one ${label}, found ${actual}." >&2
+    exit 1
+  fi
+}
+assert_count 'native like' "select count(*) from post_likes pl join public.\"user\" u on u.id = pl.user_id where pl.post_id = '$public_post_id' and u.username = '$viewer_username'"
+assert_count 'native comment' "select count(*) from post_comments pc join public.\"user\" u on u.id = pc.author_id where pc.post_id = '$public_post_id' and u.username = '$viewer_username' and pc.deleted_at is null"
+assert_count 'native friend request' "select count(*) from friend_requests fr join public.\"user\" sender on sender.id = fr.sender_id join public.\"user\" recipient on recipient.id = fr.recipient_id where sender.username = '$second_viewer_username' and recipient.username = '$public_username'"
+assert_count 'native direct conversation' "select count(*) from conversations c join public.\"user\" low on low.id = c.user_low_id join public.\"user\" high on high.id = c.user_high_id where '$second_viewer_username' in (low.username, high.username) and '$public_username' in (low.username, high.username)"
 
 echo 'Cold restarting the Android app for the real Trash journey'
 flutter test integration_test/trash_restore_real_test.dart \

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/core/Button";
 import { Skeleton } from "@/components/ui/core/Skeleton";
@@ -17,7 +17,7 @@ import { PostApiError } from "@/features/posts/shared/query-result";
 import { EditPostForm } from "@/features/posts/update-post/EditPostForm";
 import { usePostQuery } from "./use-post-query";
 import { useSession } from "@/lib/session/hooks";
-import { isPublicAction, rememberPublicIntent, resumePublicIntent, signInForPublicAction, withPublicAction, type PublicAction } from "@/lib/routing/public-return-intent";
+import { consumePublicIntent, isPublicAction, rememberPublicIntent, resumePublicIntent, signInForPublicAction, withPublicAction, type PublicAction } from "@/lib/routing/public-return-intent";
 import { postKeys } from "@/features/posts/shared/posts.keys";
 
 const NZ_TIME_ZONE = "Pacific/Auckland";
@@ -115,13 +115,7 @@ export function PostDetailView({ username, postId }: { username: string; postId:
   const remove = useDeletePostMutation(postId);
   const rawIntent = searchParams.get("intent");
   const candidateIntent = isPublicAction(rawIntent) && (rawIntent === "like" || rawIntent === "comment") ? rawIntent : null;
-  const intent = !sessionPending && candidateIntent && user && resumePublicIntent(`${pathname}?intent=${candidateIntent}`, user.id)
-    ? candidateIntent
-    : null;
-
-  useEffect(() => {
-    if (rawIntent && !sessionPending && !intent) router.replace(pathname);
-  }, [intent, pathname, rawIntent, router, sessionPending]);
+  const presentedTarget = useRef<string | null>(null);
   useEffect(() => {
     if (failure === "unauthenticated") router.replace("/sign-in");
   }, [failure, router]);
@@ -134,26 +128,49 @@ export function PostDetailView({ username, postId }: { username: string; postId:
     client.removeQueries({ queryKey: postKeys.revisions(actor, postId) });
   }, [accessRevoked, client, postId, user?.id]);
   useEffect(() => {
-    if (user && intent && query.isSuccess) void query.refetch();
-    // Refetch once after the initial authenticated response settles. The action itself always needs another click.
+    if (!rawIntent) {
+      presentedTarget.current = null;
+      return;
+    }
+    if (sessionPending) return;
+    if (!candidateIntent || !user) {
+      router.replace(pathname);
+      return;
+    }
+    const target = `${pathname}?intent=${candidateIntent}`;
+    if (presentedTarget.current === target) {
+      router.replace(pathname);
+      return;
+    }
+    if (!query.isSuccess || !resumePublicIntent(target, user.id)) {
+      if (query.isSuccess) {
+        router.replace(pathname);
+      }
+      return;
+    }
+    let current = true;
+    void query.refetch().then((result) => {
+      if (!current) return;
+      if (result.status === "success" && consumePublicIntent(target, user.id)) {
+        presentedTarget.current = target;
+        if (candidateIntent === "comment") {
+          requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>("textarea[data-composer='post-comment']")?.focus());
+        }
+      }
+      router.replace(pathname);
+    });
+    return () => { current = false; };
+    // Refetch exactly once before consuming the trusted handoff.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [intent, query.isSuccess, user?.id]);
-  // The tapped action is never replayed. A comment intent puts the cursor in the
-  // comment box; a like intent just lands on the post. Either way the link is cleaned up.
-  const readyForIntent = Boolean(user && intent && post);
-  useEffect(() => {
-    if (!readyForIntent) return;
-    if (intent === "comment") document.querySelector<HTMLTextAreaElement>("textarea[data-composer='post-comment']")?.focus();
-    router.replace(pathname);
-  }, [intent, pathname, readyForIntent, router]);
+  }, [candidateIntent, pathname, query.isSuccess, rawIntent, router, sessionPending, user?.id]);
 
   // Keep one address per post: a link with a stale or differently cased
   // username is replaced with the author's current one.
   useEffect(() => {
     if (post && post.author.username.toLowerCase() !== username.toLowerCase()) {
-      router.replace(`/u/${encodeURIComponent(post.author.username)}/${encodeURIComponent(post.id)}${intent ? `?intent=${intent}` : ""}`);
+      router.replace(`/u/${encodeURIComponent(post.author.username)}/${encodeURIComponent(post.id)}`);
     }
-  }, [intent, post, username, router]);
+  }, [post, username, router]);
 
   if (query.isPending) return <PostDetailSkeleton />;
 
