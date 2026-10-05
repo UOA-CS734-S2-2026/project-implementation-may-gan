@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
 interface HyperdriveIntegrationService {
+  diagnoseOAuthEgress: () => Promise<import("../../src/infrastructure/push/oauth-egress-probe").OAuthEgressProof>;
   proveConnection: () => Promise<{ ok: 1 }>;
   proveTransactions: (group: string) => Promise<{
     appRole: boolean;

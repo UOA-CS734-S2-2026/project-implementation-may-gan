@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createRealtimeRevocationDispatcher, type RealtimeRevocationJob, type RealtimeRevocationStore } from "../account-realtime-revocation";
+import type { ApiEnv } from "../../../env";
+import { realtimeRevocationBindingFailure, runRealtimeRevocationsForEnv, createRealtimeRevocationDispatcher, type RealtimeRevocationJob, type RealtimeRevocationStore } from "../account-realtime-revocation";
 
 function fixture() {
   const job: RealtimeRevocationJob = { ownerId: "private-owner", lifecycleGeneration: 7, attempts: 1, leaseToken: "lease" };
@@ -21,6 +22,34 @@ function fixture() {
   } as unknown as DurableObjectNamespace;
   return { job, store, namespace, fetch };
 }
+
+describe("account realtime revocation bindings", () => {
+  const bindings = () => ({
+    USER_REALTIME: {} as DurableObjectNamespace,
+    HYPERDRIVE: { connectionString: "postgres://app:private-password@app-host/db" } as ApiEnv["HYPERDRIVE"],
+    EXPORT_WORKER_HYPERDRIVE: { connectionString: "postgres://lifecycle_worker:private-password@worker-host/db" } as ApiEnv["HYPERDRIVE"],
+  });
+
+  it.each([
+    ["realtime_missing", { USER_REALTIME: undefined }],
+    ["app_database_missing_or_invalid", { HYPERDRIVE: undefined }],
+    ["worker_database_missing_or_invalid", { EXPORT_WORKER_HYPERDRIVE: undefined }],
+    ["worker_role_invalid", { EXPORT_WORKER_HYPERDRIVE: { connectionString: "postgres://app:private-password@worker-host/db" } }],
+  ] as const)("reports only %s and performs no database work", async (expected, override) => {
+    const env = { ...bindings(), ...override } as Partial<ApiEnv>;
+    const reason = realtimeRevocationBindingFailure(env);
+    expect(reason).toBe(expected);
+    expect(JSON.stringify(reason)).not.toContain("private-");
+    await expect(runRealtimeRevocationsForEnv(env)).resolves.toBeNull();
+  });
+
+  it("retains the distinct-database and worker-role guards", () => {
+    const env = bindings();
+    expect(realtimeRevocationBindingFailure(env)).toBeUndefined();
+    env.EXPORT_WORKER_HYPERDRIVE = env.HYPERDRIVE;
+    expect(realtimeRevocationBindingFailure(env)).toBe("database_bindings_identical");
+  });
+});
 
 describe("account realtime revocation dispatcher", () => {
   it("completes a fenced generation and reports content-free counters", async () => {
