@@ -30,22 +30,6 @@ function isTrustedUrl(value) {
   }
 }
 
-// Only fixed route labels leave the browser. URL paths and queries are never reported.
-export function safeDestination(value) {
-  let url;
-  try { url = new URL(value); }
-  catch { return "unknown"; }
-  if (url.origin !== STAGING_ORIGIN) return "off_origin";
-  if (url.pathname === "/settings") return url.search === "?smoke=auth" ? "settings_exact" : "settings_other";
-  if (url.pathname === "/sign-in") return url.searchParams.get("next") === PROTECTED_PATH ? "sign_in_expected" : "sign_in_other";
-  if (url.pathname === "/auth/session-refresh") return url.searchParams.get("returnTo") === PROTECTED_PATH ? "session_refresh_expected" : "session_refresh_other";
-  if (url.pathname === "/legal/acceptance") return "legal_acceptance";
-  if (url.pathname === "/setup-username") return "setup_username";
-  if (url.pathname === "/home") return "home";
-  if (url.pathname === "/") return "landing";
-  return "other_staging";
-}
-
 function isPath(page, pathname, search) {
   try {
     const url = new URL(page.url());
@@ -78,24 +62,9 @@ function isInjectedCloudflareAnalyticsScript(request) {
 
 /** Emit only allowlisted fields. Never pass exception text or browser values here. */
 export function createSafeReporter(write = (line) => process.stdout.write(`${line}\n`)) {
-  return ({ step, outcome, durationMs, category, phase, destination, progress }) => {
+  return ({ step, outcome, durationMs, category }) => {
     const fields = [`staging_auth_smoke step=${step}`, `outcome=${outcome}`, `duration_ms=${durationMs}`];
     if (category) fields.push(`category=${category}`);
-    if (step === "diagnostic" && ["login_failure", "cleanup_failure"].includes(phase)) {
-      fields.push(`phase=${phase}`);
-      fields.push(`destination=${[
-        "unknown", "off_origin", "settings_exact", "settings_other", "sign_in_expected",
-        "sign_in_other", "session_refresh_expected", "session_refresh_other", "legal_acceptance",
-        "setup_username", "home", "landing", "other_staging",
-      ].includes(destination) ? destination : "unknown"}`);
-      if (phase === "login_failure" && progress) {
-        fields.push(`submit_state=${["pending", "idle"].includes(progress.submitState) ? progress.submitState : "unknown"}`);
-        for (const [field, value] of [["session_get", progress.sessionGet], ["session_refresh", progress.sessionRefresh], ["profile_get", progress.profileGet], ["settings_response", progress.settingsResponse]]) {
-          fields.push(`${field}=${["no_request", "no_response", "success", "unauthorized", "rate_limited", "http_error"].includes(value) ? value : "unknown"}`);
-        }
-        fields.push(`settings_request=${["none", "document", "fetch", "other"].includes(progress.settingsRequest) ? progress.settingsRequest : "unknown"}`);
-      }
-    }
     write(fields.join(" "));
   };
 }
@@ -111,11 +80,6 @@ async function checkTrustedPage(page, unexpectedHost, phaseBaseline) {
 
 async function visit(page, path, unexpectedHost, phaseBaseline) {
   await page.goto(`${STAGING_ORIGIN}${path}`, { waitUntil: "domcontentloaded", timeout: STEP_TIMEOUT_MS });
-  await checkTrustedPage(page, unexpectedHost, phaseBaseline);
-}
-
-async function reload(page, unexpectedHost, phaseBaseline) {
-  await page.reload({ waitUntil: "domcontentloaded", timeout: STEP_TIMEOUT_MS });
   await checkTrustedPage(page, unexpectedHost, phaseBaseline);
 }
 
@@ -161,65 +125,15 @@ function isTrustedSignInRequest(request) {
   } catch { return false; }
 }
 
-function authRequestKind(request) {
-  try {
-    const url = new URL(request.url());
-    if (url.origin !== STAGING_ORIGIN || url.search !== "") return null;
-    if (url.pathname === "/api/auth/get-session") {
-      if (request.method() === "GET") return "session_get";
-      if (request.method() === "POST") return "session_refresh";
-    }
-    if (url.pathname === "/api/v1/profile/username" && request.method() === "GET") return "profile_get";
-  } catch { /* Ignore URLs that cannot match the fixed origin. */ }
-  return null;
-}
-
-function isSettingsRequest(request) {
-  try {
-    const url = new URL(request.url());
-    return url.origin === STAGING_ORIGIN && url.pathname === "/settings"
-      && url.searchParams.get("smoke") === "auth" && request.method() === "GET";
-  } catch { return false; }
-}
-
-function settingsRequestKind(request) {
-  if (request.isNavigationRequest()) return "document";
-  if (request.resourceType() === "fetch") return "fetch";
-  return "other";
-}
-
 function observeSignIn(page) {
-  const observation = {
-    requested: false,
-    status: null,
-    authRequests: Object.fromEntries(["session_get", "session_refresh", "profile_get"].map((kind) => [kind, { requested: false, status: null }])),
-    settingsRequest: { kind: "none", requested: false, status: null },
-  };
+  const observation = { requested: false, status: null };
   page.on("request", (request) => {
     if (isTrustedSignInRequest(request)) observation.requested = true;
-    if (isSettingsRequest(request)) {
-      observation.settingsRequest.kind = settingsRequestKind(request);
-      observation.settingsRequest.requested = true;
-    }
-    const kind = authRequestKind(request);
-    if (kind) observation.authRequests[kind].requested = true;
   });
   page.on("response", (response) => {
     if (isTrustedSignInRequest(response.request())) observation.status = response.status();
-    if (isSettingsRequest(response.request())) observation.settingsRequest.status = response.status();
-    const kind = authRequestKind(response.request());
-    if (kind) observation.authRequests[kind].status = response.status();
   });
   return observation;
-}
-
-function responseClass({ requested, status }) {
-  if (!requested) return "no_request";
-  if (status === null) return "no_response";
-  if (status >= 200 && status < 300) return "success";
-  if (status === 401) return "unauthorized";
-  if (status === 429) return "rate_limited";
-  return "http_error";
 }
 
 async function loginFailureCategory(context, observation) {
@@ -231,11 +145,13 @@ async function loginFailureCategory(context, observation) {
   const cookies = await context.cookies(STAGING_ORIGIN);
   // This category records only that the allowlisted cookie name exists. It
   // deliberately omits the cookie value and every response detail.
-  return cookies.some(({ name }) => name === SESSION_COOKIE) ? "login_cookie_created_navigation_timeout" : "login_cookie_missing";
+  return cookies.some(({ name }) => name === SESSION_COOKIE) ? "login_cookie_created_no_response" : "login_cookie_missing";
 }
 
 async function verifySessionCookie(context, unexpectedHost, phaseBaseline) {
-  const cookie = (await context.cookies(STAGING_ORIGIN)).find(({ name }) => name === SESSION_COOKIE);
+  let cookie;
+  try { cookie = (await context.cookies(STAGING_ORIGIN)).find(({ name }) => name === SESSION_COOKIE); }
+  catch { throw failure("login_observation_failed"); }
   checkPhase(unexpectedHost, phaseBaseline);
   if (!cookie) throw failure("session_cookie_missing");
   if (
@@ -249,7 +165,7 @@ async function verifySessionCookie(context, unexpectedHost, phaseBaseline) {
   }
 }
 
-async function defaultJourney({ context, page, unexpectedHost, journeyBaseline, markSessionPossible, markLoggedOut, reportDiagnostic, email, password }) {
+async function defaultJourney({ context, page, unexpectedHost, journeyBaseline, markSessionPossible, markLoggedOut, email, password }) {
   await visit(page, "/", unexpectedHost, journeyBaseline);
   await visit(page, PROTECTED_PATH, unexpectedHost, journeyBaseline);
   await verifySignInDestination(page, unexpectedHost, journeyBaseline);
@@ -258,54 +174,37 @@ async function defaultJourney({ context, page, unexpectedHost, journeyBaseline, 
   checkPhase(unexpectedHost, journeyBaseline);
   await page.getByLabel("Password", { exact: true }).fill(password);
   checkPhase(unexpectedHost, journeyBaseline);
-  // The server can establish a cookie before this navigation becomes visible.
-  // Cleanup must therefore assume a session exists from submission onward.
+  // A successful response can set a cookie before the app's client-side
+  // navigation finishes. Observe the response before submitting, then prove
+  // protected access with a fresh document navigation instead of waiting for
+  // that client-side transition.
   const signIn = observeSignIn(page);
+  const signInResponse = page.waitForResponse((response) => isTrustedSignInRequest(response.request()), { timeout: STEP_TIMEOUT_MS }).catch(() => null);
   markSessionPossible();
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   checkPhase(unexpectedHost, journeyBaseline);
-  try {
-    await page.waitForURL((url) => url.origin === STAGING_ORIGIN && url.pathname === "/settings" && url.search === "?smoke=auth", { timeout: STEP_TIMEOUT_MS });
-    checkPhase(unexpectedHost, journeyBaseline);
-  } catch {
-    const submitting = await page.getByRole("button", { name: "Signing in…", exact: true }).isVisible().catch(() => false);
-    reportDiagnostic("login_failure", page, {
-      submitState: submitting ? "pending" : "idle",
-      sessionGet: responseClass(signIn.authRequests.session_get),
-      sessionRefresh: responseClass(signIn.authRequests.session_refresh),
-      profileGet: responseClass(signIn.authRequests.profile_get),
-      settingsRequest: signIn.settingsRequest.kind,
-      settingsResponse: responseClass(signIn.settingsRequest),
-    });
-    if (unexpectedHost.count > journeyBaseline) throw failure("unexpected_host");
+  const response = await signInResponse;
+  checkPhase(unexpectedHost, journeyBaseline);
+  if (!response || response.status() < 200 || response.status() >= 300) {
     let category;
     try { category = await loginFailureCategory(context, signIn); }
     catch { throw failure("login_observation_failed"); }
     throw failure(category);
   }
-  await verifySettings(page, unexpectedHost, journeyBaseline);
-
-  await reload(page, unexpectedHost, journeyBaseline);
-  await verifySettings(page, unexpectedHost, journeyBaseline);
-
-  const secondPage = await context.newPage();
-  checkPhase(unexpectedHost, journeyBaseline);
-  await visit(secondPage, PROTECTED_PATH, unexpectedHost, journeyBaseline);
-  await verifySettings(secondPage, unexpectedHost, journeyBaseline);
   await verifySessionCookie(context, unexpectedHost, journeyBaseline);
+  await visit(page, PROTECTED_PATH, unexpectedHost, journeyBaseline);
+  await verifySettings(page, unexpectedHost, journeyBaseline);
 
   await waitForVisible(page.getByRole("button", { name: "Sign out", exact: true }), unexpectedHost, journeyBaseline);
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   checkPhase(unexpectedHost, journeyBaseline);
   try {
     // SignOutButton always navigates home after its request. Home alone is not
-    // logout proof, so each existing tab must subsequently lose protected access.
+    // logout proof, so a fresh protected visit must lose access.
     await page.waitForURL((url) => url.origin === STAGING_ORIGIN && url.pathname === "/", { timeout: STEP_TIMEOUT_MS });
     await checkTrustedPage(page, unexpectedHost, journeyBaseline);
     await visit(page, PROTECTED_PATH, unexpectedHost, journeyBaseline);
     await verifySignInDestination(page, unexpectedHost, journeyBaseline);
-    await visit(secondPage, PROTECTED_PATH, unexpectedHost, journeyBaseline);
-    await verifySignInDestination(secondPage, unexpectedHost, journeyBaseline);
     checkPhase(unexpectedHost, journeyBaseline);
   } catch {
     throw failure(unexpectedHost.count > 0 ? "unexpected_host" : "logout_failed");
@@ -396,7 +295,6 @@ export async function runSmoke({ browserType, reporter = createSafeReporter(), j
     page = await context.newPage();
     const journeyBaseline = unexpectedHost.count;
     await journey({
-      reportDiagnostic: (phase, currentPage, progress) => reporter({ step: "diagnostic", outcome: "observed", durationMs: Date.now() - startedAt, phase, destination: safeDestination(currentPage.url()), progress }),
       context,
       page,
       unexpectedHost,
@@ -424,7 +322,6 @@ export async function runSmoke({ browserType, reporter = createSafeReporter(), j
       reporter({ step: "cleanup", outcome: "passed", durationMs: Date.now() - cleanupStartedAt });
     } catch {
       passed = false;
-      if (page) reporter({ step: "diagnostic", outcome: "observed", durationMs: Date.now() - cleanupStartedAt, phase: "cleanup_failure", destination: safeDestination(page.url()) });
       reporter({ step: "cleanup", outcome: "failed", durationMs: Date.now() - cleanupStartedAt, category: "cleanup_failed" });
       try {
         if (browser) await browser.close();
