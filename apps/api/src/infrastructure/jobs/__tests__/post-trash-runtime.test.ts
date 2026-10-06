@@ -16,7 +16,8 @@ describe("post Trash runtime admission", () => {
     expect(hasPostTrashCleanupDependencies({ HYPERDRIVE: app, ...storage })).toBe(false);
     expect(hasPostTrashCleanupDependencies({ HYPERDRIVE: app, EXPORT_WORKER_HYPERDRIVE: app, ...storage })).toBe(false);
     expect(hasPostTrashCleanupDependencies({ HYPERDRIVE: app, EXPORT_WORKER_HYPERDRIVE: { connectionString: app.connectionString }, ...storage })).toBe(false);
-    expect(hasPostTrashCleanupDependencies({ HYPERDRIVE: app, EXPORT_WORKER_HYPERDRIVE: { connectionString: "postgresql://other_worker@db/dayli" }, ...storage })).toBe(false);
+    expect(hasPostTrashCleanupDependencies({ HYPERDRIVE: app, EXPORT_WORKER_HYPERDRIVE: { connectionString: "postgresql://hyperdrive_proxy@127.0.0.1/dayli" }, ...storage })).toBe(true);
+    expect(hasPostTrashCleanupDependencies({ HYPERDRIVE: app, EXPORT_WORKER_HYPERDRIVE: { connectionString: "not-a-database-url" }, ...storage })).toBe(false);
     expect(hasPostTrashCleanupDependencies({ HYPERDRIVE: app, EXPORT_WORKER_HYPERDRIVE: worker })).toBe(false);
     expect(hasPostTrashCleanupDependencies({ HYPERDRIVE: app, EXPORT_WORKER_HYPERDRIVE: worker, ...storage, R2_SECRET_ACCESS_KEY: "" })).toBe(false);
   });

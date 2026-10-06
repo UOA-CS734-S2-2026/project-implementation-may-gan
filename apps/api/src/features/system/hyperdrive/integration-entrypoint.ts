@@ -11,6 +11,7 @@ import { WorkerEntrypoint } from "cloudflare:workers";
 import type { ApiEnv } from "../../../env";
 import { notificationRuntimeProof } from "../../../infrastructure/push/notification-runtime-proof";
 import { probeOAuthEgressMatrix, probeOAuthEgress, type OAuthEgressProof } from "../../../infrastructure/push/oauth-egress-probe";
+import { provePostTrashCleanupAdmission, type PostTrashCleanupAdmissionProof } from "../../../infrastructure/jobs/post-trash-runtime";
 
 export interface StagingRevisionProof {
   revision: string;
@@ -60,6 +61,10 @@ export class HyperdriveIntegrationEntrypoint extends WorkerEntrypoint<ApiEnv> {
     const hash = await crypto.subtle.digest("SHA-256", bytes);
     const storageDigest = Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("");
     return { revision, storageDigest };
+  }
+
+  async provePostTrashCleanupAdmission(): Promise<PostTrashCleanupAdmissionProof> {
+    return provePostTrashCleanupAdmission(this.env);
   }
 
   async provePostTrashWorkerFence(): Promise<PostTrashWorkerFenceProof> {

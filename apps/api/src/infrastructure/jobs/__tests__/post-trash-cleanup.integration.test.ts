@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createPostgresSetAvatarRepository } from "../../../features/profiles/set-avatar/set-avatar.repository";
 import { createPostgresPostTrashRepository } from "../../../features/posts/trash-post/trash-post.repository";
 import { createPostgresPostTrashCleanupStore } from "../post-trash-cleanup";
-import { runPostTrashCleanupForEnv } from "../post-trash-runtime";
+import { provePostTrashCleanupAdmission, runPostTrashCleanupForEnv } from "../post-trash-runtime";
 
 const migratorUrl = process.env.TEST_DATABASE_URL;
 const appUrl = process.env.TEST_APP_DATABASE_URL;
@@ -285,7 +285,7 @@ function fixtureUrl(value: string) {
         restore_until = '2025-09-08T00:00:00Z', trash_purge_due_at = '2025-09-15T00:00:00Z'
         where id = ${runtimePost}`;
 
-      const summary = await runPostTrashCleanupForEnv({
+      const runtimeEnvironment = {
         HYPERDRIVE: { connectionString: fixtureUrl(appUrl!) },
         EXPORT_WORKER_HYPERDRIVE: { connectionString: fixtureUrl(workerUrl!) },
         BETTER_AUTH_SECRET: "unused-runtime-proof-secret",
@@ -296,7 +296,29 @@ function fixtureUrl(value: string) {
         R2_ACCESS_KEY_ID: "local-access",
         R2_SECRET_ACCESS_KEY: "local-secret",
         R2_LOCAL_ENDPOINT: `http://127.0.0.1:${address.port}`,
+      };
+      const appRoleWorkerUrl = new URL(fixtureUrl(appUrl!));
+      appRoleWorkerUrl.searchParams.set("application_name", "distinct-binding-same-role");
+      const wrongRoleEnvironment = {
+        ...runtimeEnvironment,
+        EXPORT_WORKER_HYPERDRIVE: { connectionString: appRoleWorkerUrl.href },
+      };
+      await expect(provePostTrashCleanupAdmission(wrongRoleEnvironment)).resolves.toEqual({
+        structuralDependencies: true,
+        connectionStringNamesLifecycleWorker: false,
+        authoritativeWorkerRole: false,
+        runtimeAdmitted: false,
       });
+      expect(await runPostTrashCleanupForEnv(wrongRoleEnvironment)).toBeNull();
+      expect(objects.size).toBe(1);
+      await expect(provePostTrashCleanupAdmission(runtimeEnvironment)).resolves.toEqual({
+        structuralDependencies: true,
+        connectionStringNamesLifecycleWorker: true,
+        authoritativeWorkerRole: true,
+        runtimeAdmitted: true,
+      });
+
+      const summary = await runPostTrashCleanupForEnv(runtimeEnvironment);
       expect(summary).toMatchObject({ claimed: 1, deleted: 1, rescheduled: 0, failed: 0, fenced: 0 });
       expect(objects.size).toBe(0);
       const [remaining] = await migrator.client`select
