@@ -325,6 +325,17 @@ export function createApp({
   });
 
   // Middleware must precede the routes it wraps.
+  api.use("/api/v1/realtime/*", async (context, next) => {
+    const started = Date.now();
+    try { await next(); }
+    finally {
+      if ((context.env as Partial<ApiEnv> | undefined)?.API_RATE_LIMIT_SCOPE === "staging") {
+        const phase = context.req.path === "/api/v1/realtime/tickets" ? "ticket" : context.req.path === "/api/v1/realtime/connect" ? "connect" : "other";
+        try { console.info("realtime request diagnostics", { phase, httpStatus: context.res.status, elapsedMs: Math.max(0, Math.min(60_000, Date.now() - started)) }); }
+        catch { /* Ignore diagnostic sink failures. */ }
+      }
+    }
+  });
   if (trustedOrigins.length > 0) registerApplicationCors(api, trustedOrigins);
   const authOrigins = auth?.trustedOrigins ?? trustedOrigins;
   if (authOrigins.length > 0) registerStrictAuthCors(api, authOrigins);
@@ -930,6 +941,7 @@ function createRealtimeDependencies(
   const webSocketUrl = new URL("/api/v1/realtime/connect", configuration.publicApiBaseURL);
   webSocketUrl.protocol = webSocketUrl.protocol === "https:" ? "wss:" : "ws:";
   const connect: RealtimeConnectRouteDependencies = {
+    onDiagnostic: env.API_RATE_LIMIT_SCOPE === "staging" ? (value) => console.info("realtime handshake diagnostics", value) : undefined,
     tickets,
     resolveActiveSession: async (sessionId) => resolveRealtimeSessionById(configuration, sessionId),
     userRealtime: env.USER_REALTIME!,

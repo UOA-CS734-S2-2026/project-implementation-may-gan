@@ -38,12 +38,14 @@ export async function createNotificationDeliveryDispatcher(
   if (!account) return configurationFailure("credentials_invalid");
   const fcm = createFcmHttpV1Sender({
     serviceAccount: account,
+    onTrace: diagnostics ? (value) => console.info("notification delivery trace", value) : undefined,
     onDiagnostic: diagnostics ? (value) => console.info("notification delivery diagnostics", value) : undefined,
   });
   const dispatcher = createNotificationDispatcher({
     store: createHyperdriveNotificationStore(env.HYPERDRIVE),
     resolver: createHyperdriveNotificationResolver(env.HYPERDRIVE, protector),
     sender: { send: (notification, options) => fcm.sendGeneric(notification, options) },
+    onTrace: diagnostics ? (value) => console.info("notification dispatch trace", value) : undefined,
     onDiagnostic: diagnostics ? (value) => console.info("notification delivery diagnostics", value) : undefined,
   });
   const report = async (mode: "immediate" | "scheduled") => {

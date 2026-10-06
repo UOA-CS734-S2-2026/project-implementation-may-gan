@@ -27,6 +27,23 @@ const resolved = {
 };
 
 describe("generic notification dispatcher", () => {
+  it("reports fixed phase timings and safe resolver failures without affecting retry behavior", async () => {
+    const traces = vi.fn();
+    const dispatcher = createNotificationDispatcher({
+      store: store(),
+      resolver: { resolve: vi.fn(async () => { throw Object.assign(new Error("private-token private-message"), { code: "ENOTFOUND" }); }), invalidate: vi.fn() },
+      sender: { send: vi.fn() }, now: () => now, onTrace: traces,
+    });
+    await expect(dispatcher.dispatchScheduled()).resolves.toMatchObject({ rescheduled: 1 });
+    const rows = traces.mock.calls.map(([row]) => row);
+    expect(rows.map((row) => row.stage)).toEqual(["claim", "lease", "resolve", "claim"]);
+    expect(rows[2]).toEqual({ stage: "resolve", outcome: "failed", elapsedMs: expect.any(Number), remainingBudgetMs: 25_000, exception: { errorKind: "object", errorName: "Error", errorCode: "ENOTFOUND", causeName: "none", causeCode: "none" } });
+    expect(JSON.stringify(rows)).not.toContain("private-");
+  });
+  it("does not change delivery when trace sinks fail", async () => {
+    const dispatcher = createNotificationDispatcher({ store: store(), resolver: { resolve: vi.fn(async () => resolved), invalidate: vi.fn() }, sender: { send: vi.fn(async () => ({ ok: true as const })) }, now: () => now, onTrace: () => { throw new Error("private-sink"); } });
+    await expect(dispatcher.dispatchScheduled()).resolves.toMatchObject({ delivered: 1 });
+  });
   it("suppresses stale authorization without calling the provider", async () => {
     const storage = store();
     const sender = { send: vi.fn() };
