@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { seedPastDeadline } from "../scripts/staging-trash-lifecycle-proof";
 import { repoPath } from "./migrations/paths";
 
 const migratorUrl = process.env.TEST_LIFECYCLE_DATABASE_URL;
@@ -29,6 +30,8 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
   const legalVersions: string[] = [];
   const receipts: string[] = [];
   const exportCleanupTasks: string[] = [];
+  const proofPosts: string[] = [];
+  const proofReservations: string[] = [];
 
   async function createUser(label: string): Promise<string> {
     const id = `lifecycle-${label}-${crypto.randomUUID()}`;
@@ -53,6 +56,11 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
         await migrator`delete from public.terms_acceptances where terms_version_id = any(${legalVersions})`;
         await migrator`delete from public.registration_intents where terms_version_id = any(${legalVersions})`;
       }
+      if (proofPosts.length > 0) {
+        await migrator`delete from public.post_media where post_id = any(${proofPosts})`;
+        await migrator`delete from public.posts where id = any(${proofPosts})`;
+      }
+      if (proofReservations.length > 0) await migrator`delete from public.media_reservation where id = any(${proofReservations})`;
       if (users.length > 0) await migrator`delete from public."user" where id = any(${users})`;
       if (exportCleanupTasks.length > 0) await migrator`delete from public.data_export_object_cleanup_tasks where id = any(${exportCleanupTasks})`;
       if (legalVersions.length > 0) await migrator`delete from public.legal_document_versions where id = any(${legalVersions})`;
@@ -321,6 +329,59 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     ]);
     await expect(app`select * from public.account_google_reauthentication_intents`).rejects.toMatchObject({ code: "42501" });
     await expect(app`insert into public.account_management_grants default values`).rejects.toMatchObject({ code: "42501" });
+  });
+
+  it("seeds only an exact freshly trashed synthetic proof fixture past its cleanup deadline", async () => {
+    const marker = `staging-trash-proof-${crypto.randomUUID().replaceAll("-", "")}`;
+    const ownerId = `trash-proof-owner-${crypto.randomUUID()}`;
+    const sessionId = `trash-proof-session-${crypto.randomUUID()}`;
+    const postId = `trash-proof-post-${crypto.randomUUID()}`;
+    const reservationId = `trash-proof-reservation-${crypto.randomUUID()}`;
+    const mediaId = `trash-proof-media-${crypto.randomUUID()}`;
+    users.push(ownerId);
+    proofPosts.push(postId);
+    proofReservations.push(reservationId);
+    await migrator`insert into public."user" (id, name, email)
+      values (${ownerId}, ${`${marker}-2`}, ${`${marker}-2@synthetic.invalid`})`;
+    await migrator`insert into public.session (id, token, user_id, expires_at)
+      values (${sessionId}, ${`trash-proof-token-${crypto.randomUUID()}`}, ${ownerId}, clock_timestamp() + interval '10 minutes')`;
+    await migrator`insert into public.media_reservation
+      (id, owner_id, object_key, content_type, byte_size, status, validated_at, expires_at)
+      values (${reservationId}, ${ownerId}, ${`media/${ownerId}/${reservationId}`}, 'image/jpeg', 12,
+        'validated', clock_timestamp(), clock_timestamp() + interval '10 minutes')`;
+    await migrator`insert into public.posts
+      (id, author_id, local_date, prompt_id, reflective_answer, rating, audience, accepted_at, released_at)
+      values (${postId}, ${ownerId}, current_date, 'prompt-01-01', ${`${marker}:2`}, 5,
+        'solo', clock_timestamp() - interval '1 second', clock_timestamp())`;
+    await migrator`insert into public.post_media (id, post_id, reservation_id, attachment_order)
+      values (${mediaId}, ${postId}, ${reservationId}, 0)`;
+
+    const [trashed] = await app`select * from public.move_post_to_trash(${ownerId}, ${sessionId}, ${postId})`;
+    expect(trashed?.outcome).toBe("trashed");
+    const generation = Number(trashed?.generation);
+    const fixture = { ownerId, postId, mediaId, reservationId, generation,
+      objectKey: `media/${ownerId}/${reservationId}`, marker };
+    const anotherMarker = `staging-trash-proof-${crypto.randomUUID().replaceAll("-", "")}`;
+    await expect(migrator.begin((tx) => seedPastDeadline(tx, { ...fixture, marker: anotherMarker })))
+      .rejects.toThrow("Synthetic owner guard failed.");
+    await expect(migrator.begin((tx) => seedPastDeadline(tx, { ...fixture, generation: generation + 1 })))
+      .rejects.toThrow("Synthetic post guard failed.");
+    await expect(migrator.begin((tx) => seedPastDeadline(tx, {
+      ...fixture, reservationId: `missing-${crypto.randomUUID()}`,
+    }))).rejects.toThrow("Synthetic reservation guard failed.");
+    const [stillFresh] = await migrator`select restore_until > clock_timestamp() as restorable,
+      trash_purge_due_at > clock_timestamp() as purge_in_future from public.posts where id = ${postId}`;
+    expect(stillFresh).toEqual({ restorable: true, purge_in_future: true });
+
+    const objectKey = await migrator.begin((tx) => seedPastDeadline(tx, fixture));
+    expect(objectKey).toBe(`media/${ownerId}/${reservationId}`);
+    const [seeded] = await migrator`select
+      trashed_at < clock_timestamp() - interval '336 hours' as past_deadline,
+      restore_until = trashed_at + interval '168 hours' as restore_exact,
+      trash_purge_due_at = trashed_at + interval '336 hours' as purge_exact,
+      trash_lease_token is null as lease_clear, trash_failure_category is null as failure_clear
+      from public.posts where id = ${postId}`;
+    expect(seeded).toEqual({ past_deadline: true, restore_exact: true, purge_exact: true, lease_clear: true, failure_clear: true });
   });
 
   it("stages two synthetic owners through leased R2 cleanup, retry, and physical completion", async () => {
