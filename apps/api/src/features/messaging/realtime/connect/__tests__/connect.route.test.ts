@@ -22,6 +22,16 @@ function rateLimiting(realtime = true): ApiRateLimitDependencies {
 }
 
 describe("connect realtime route", () => {
+  it("reports fixed rejection reasons without tickets, origins or identifiers", async () => {
+    const diagnostic = vi.fn();
+    const namespace = { idFromName: vi.fn(), get: vi.fn() } as unknown as DurableObjectNamespace;
+    const api = createApp({ realtimeConnect: { onDiagnostic: diagnostic, tickets: { consume: vi.fn(async () => null) }, resolveActiveSession: vi.fn(async () => null), userRealtime: namespace, trustedOrigins: ["https://web.example.test"], policyAllowsOrdinary: async () => true } });
+    expect((await api.request("/api/v1/realtime/connect?ticket=private-ticket", { headers: { Upgrade: "websocket", Origin: "https://private-origin.example.test" } })).status).toBe(403);
+    expect(diagnostic.mock.calls[0][0]).toEqual({ outcome: "origin_denied", httpStatus: 403, elapsedMs: expect.any(Number) });
+    expect((await api.request("/api/v1/realtime/connect?ticket=private-ticket", { headers: { Upgrade: "websocket", Origin: "https://web.example.test" } })).status).toBe(401);
+    expect(diagnostic.mock.calls[1][0]).toEqual({ outcome: "ticket_invalid", httpStatus: 401, elapsedMs: expect.any(Number) });
+    expect(JSON.stringify(diagnostic.mock.calls)).not.toContain("private-");
+  });
   it("forwards an authorized protocol upgrade to the user Durable Object", async () => {
     const fetch = vi.fn(async () => new Response(null, { status: 200 }));
     const namespace = {

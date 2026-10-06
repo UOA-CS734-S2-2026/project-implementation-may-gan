@@ -1,3 +1,4 @@
+import { diagnosticElapsed, safeException, type SafeException } from "../push/diagnostic-error";
 import type { DeliveryResult } from "../jobs/dispatch-outbox";
 import type { GenericFcmNotificationInput } from "../push/fcm";
 import { retryDelayMs } from "../jobs/dispatch-outbox";
@@ -26,6 +27,14 @@ export interface NotificationDispatchSummary {
   released: number;
 }
 
+export interface NotificationDispatchTrace {
+  stage: "claim" | "lease" | "resolve" | "send";
+  outcome: "completed" | "failed" | "timed_out" | "suppressed";
+  elapsedMs: number;
+  remainingBudgetMs: number;
+  exception?: SafeException;
+}
+
 export interface NotificationDispatcher {
   dispatchImmediately(): Promise<NotificationDispatchSummary>;
   dispatchScheduled(): Promise<NotificationDispatchSummary>;
@@ -50,6 +59,7 @@ export function createNotificationDispatcher(input: {
   deliveryTimeoutMs?: number;
   maxAttempts?: number;
   onDiagnostic?: (value: { stage: "resolve" | "send"; outcome: "timed_out" | "failed" | "suppressed" }) => void;
+  onTrace?: (value: NotificationDispatchTrace) => void;
 }): NotificationDispatcher {
   const now = input.now ?? (() => new Date());
   const random = input.random ?? Math.random;
@@ -67,8 +77,23 @@ export function createNotificationDispatcher(input: {
 
   async function dispatch(limit: number, deadline: number): Promise<NotificationDispatchSummary> {
     const summary = emptySummary();
+    const trace = (stage: NotificationDispatchTrace["stage"], outcome: NotificationDispatchTrace["outcome"], started: number, exception?: SafeException) => {
+      try { input.onTrace?.({ stage, outcome, elapsedMs: diagnosticElapsed(started), remainingBudgetMs: Math.max(0, Math.min(60_000, deadline - now().getTime())), ...(exception ? { exception } : {}) }); }
+      catch { /* Ignore diagnostic sink failures. */ }
+    };
+    const timedStore = async <T>(stage: "claim" | "lease", operation: () => Promise<T>): Promise<T> => {
+      const started = Date.now();
+      try {
+        const result = await operation();
+        trace(stage, "completed", started);
+        return result;
+      } catch (error) {
+        trace(stage, "failed", started, safeException(error));
+        throw error;
+      }
+    };
     for (let remaining = limit; remaining > 0 && now().getTime() < deadline; remaining -= 1) {
-      const [claimed] = await input.store.claimDue({ now: now(), limit: 1, leaseForMs, maxAttempts, leaseToken: createLeaseToken });
+      const [claimed] = await timedStore("claim", () => input.store.claimDue({ now: now(), limit: 1, leaseForMs, maxAttempts, leaseToken: createLeaseToken }));
       if (!claimed) break;
       summary.claimed += 1;
       if (now().getTime() >= deadline) {
@@ -76,10 +101,12 @@ export function createNotificationDispatcher(input: {
         else summary.fenced += 1;
         break;
       }
-      const job = await input.store.renewLease(claimed, { now: now(), leaseForMs });
+      const job = await timedStore("lease", () => input.store.renewLease(claimed, { now: now(), leaseForMs }));
       if (!job) { summary.fenced += 1; continue; }
 
+      const resolutionStarted = Date.now();
       const resolution = await resolveWithinDeadline(input.resolver, job, deadline, now);
+      trace("resolve", resolution.state === "resolved" ? resolution.notification ? "completed" : "suppressed" : resolution.state, resolutionStarted, resolution.state === "failed" ? resolution.exception : undefined);
       if (resolution.state === "timed_out" || now().getTime() >= deadline) {
         diagnose({ stage: "resolve", outcome: "timed_out" });
         if (await input.store.releaseLease(job, now())) summary.released += 1;
@@ -103,7 +130,7 @@ export function createNotificationDispatcher(input: {
         continue;
       }
 
-      const renewed = await input.store.renewLease(job, { now: now(), leaseForMs });
+      const renewed = await timedStore("lease", () => input.store.renewLease(job, { now: now(), leaseForMs }));
       if (!renewed) { summary.fenced += 1; continue; }
       const remainingBudgetMs = Math.max(0, deadline - now().getTime());
       if (remainingBudgetMs === 0) {
@@ -111,12 +138,15 @@ export function createNotificationDispatcher(input: {
         else summary.fenced += 1;
         break;
       }
+      const sendStarted = Date.now();
+      let sendOutcome: NotificationDispatchTrace["outcome"] = "completed";
       const result = await sendWithTimeout(
         input.sender,
         resolution.notification,
         Math.min(deliveryTimeoutMs, remainingBudgetMs),
-        diagnose,
+        (value) => { sendOutcome = value.outcome; diagnose(value); },
       );
+      trace("send", sendOutcome, sendStarted);
       if (result.ok) {
         if (await input.store.markDelivered(renewed, now())) summary.delivered += 1;
         else summary.fenced += 1;
@@ -143,7 +173,7 @@ export function createNotificationDispatcher(input: {
 
 type ResolutionOutcome =
   | { state: "resolved"; notification: Awaited<ReturnType<DirectMessageNotificationResolver["resolve"]>> }
-  | { state: "failed" }
+  | { state: "failed"; exception: SafeException }
   | { state: "timed_out" };
 
 async function resolveWithinDeadline(
@@ -160,7 +190,7 @@ async function resolveWithinDeadline(
   const operation = Promise.resolve().then(() => resolver.resolve(job, { signal: controller.signal }));
   const settled: Promise<ResolutionOutcome> = operation.then(
     (notification) => ({ state: "resolved", notification }),
-    () => ({ state: "failed" }),
+    (error: unknown) => ({ state: "failed", exception: safeException(error) }),
   );
   const timeout = new Promise<ResolutionOutcome>((resolve) => {
     timer = setTimeout(() => {

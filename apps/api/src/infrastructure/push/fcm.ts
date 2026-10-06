@@ -1,4 +1,5 @@
 import { importPKCS8, SignJWT } from "jose";
+import { diagnosticElapsed, safeException, type SafeException } from "./diagnostic-error";
 
 export interface FcmServiceAccount {
   clientEmail: string;
@@ -42,9 +43,9 @@ export function classifyFcmTransportFailure(error: unknown): FcmTransportReason 
   try {
     const entries = [error, typeof error === "object" && error !== null ? (error as { cause?: unknown }).cause : undefined];
     for (const entry of entries) {
-      if (typeof entry !== "object" || entry === null) continue;
-      const { message, code, name } = entry as { message?: unknown; code?: unknown; name?: unknown };
-      const text = typeof message === "string" ? message : "";
+      if ((typeof entry !== "object" || entry === null) && typeof entry !== "string") continue;
+      const { message, code, name } = typeof entry === "string" ? { message: entry, code: undefined, name: undefined } : entry as { message?: unknown; code?: unknown; name?: unknown };
+      const text = typeof message === "string" ? message.slice(0, 4_096) : "";
       if (/cannot perform i\/o on behalf of a different request/i.test(text)) return "cross_request_io";
       if (/too many subrequests|subrequest limit/i.test(text)) return "subrequest_limit";
       if (/illegal invocation|invalid invocation/i.test(text)) return "invalid_invocation";
@@ -70,8 +71,10 @@ function responseStatus(value: unknown): number | undefined {
   return typeof value === "number" && Number.isInteger(value) && value >= 100 && value <= 599 ? value : undefined;
 }
 
+export type FcmTrace = FcmDiagnostic & { elapsedMs: number; exception?: SafeException };
+
 export class FcmOAuthError extends Error {
-  constructor(public readonly category: "signing_invalid" | "response_rejected" | "response_invalid" | "transport_failed", public readonly httpStatus?: number, public readonly transportReason?: FcmTransportReason) {
+  constructor(public readonly category: "signing_invalid" | "response_rejected" | "response_invalid" | "transport_failed", public readonly httpStatus?: number, public readonly transportReason?: FcmTransportReason, public readonly exception?: SafeException) {
     super(category);
   }
 }
@@ -110,8 +113,8 @@ export async function requestFcmOAuthToken(input: {
       .setIssuedAt(Math.floor(now().getTime() / 1_000))
       .setExpirationTime("5m")
       .sign(key);
-  } catch {
-    throw new FcmOAuthError("signing_invalid");
+  } catch (error) {
+    throw new FcmOAuthError("signing_invalid", undefined, undefined, safeException(error));
   }
 
   let response: Response;
@@ -123,7 +126,7 @@ export async function requestFcmOAuthToken(input: {
       signal: input.signal,
     });
   } catch (error) {
-    throw new FcmOAuthError("transport_failed", undefined, classifyFcmTransportFailure(error));
+    throw new FcmOAuthError("transport_failed", undefined, classifyFcmTransportFailure(error), safeException(error));
   }
   if (!response || typeof response !== "object" || typeof response.ok !== "boolean") {
     throw new FcmOAuthError("response_invalid");
@@ -145,7 +148,7 @@ export async function requestFcmOAuthToken(input: {
 }
 
 /** Worker-compatible FCM HTTP v1 sender. It never includes sender or message text. */
-export function createFcmHttpV1Sender(input: { serviceAccount: FcmServiceAccount; fetch?: typeof globalThis.fetch; now?: () => Date; onDiagnostic?: (value: FcmDiagnostic) => void }) {
+export function createFcmHttpV1Sender(input: { serviceAccount: FcmServiceAccount; fetch?: typeof globalThis.fetch; now?: () => Date; onDiagnostic?: (value: FcmDiagnostic) => void; onTrace?: (value: FcmTrace) => void }) {
   const fetcher = input.fetch ?? globalThis.fetch;
   const now = input.now ?? (() => new Date());
   let accessToken: { value: string; expiresAt: number } | undefined;
@@ -154,12 +157,18 @@ export function createFcmHttpV1Sender(input: { serviceAccount: FcmServiceAccount
     try { input.onDiagnostic?.(value); } catch { /* Ignore diagnostic sink failures. */ }
   };
 
+  const trace = (value: FcmTrace) => {
+    try { input.onTrace?.(value); } catch { /* Ignore diagnostic sink failures. */ }
+  };
+
   async function oauthToken(signal?: AbortSignal): Promise<string> {
+    const started = Date.now();
     if (accessToken && accessToken.expiresAt > now().getTime() + 30_000) return accessToken.value;
     try {
       const token = await requestFcmOAuthToken({ serviceAccount: input.serviceAccount, fetch: fetcher, now, signal });
       accessToken = { value: token.token, expiresAt: token.expiresAt };
       diagnose({ stage: "oauth", outcome: "accepted" });
+      trace({ stage: "oauth", outcome: "accepted", elapsedMs: diagnosticElapsed(started) });
       return accessToken.value;
     } catch (error) {
       const outcome = signal?.aborted ? "aborted" : error instanceof FcmOAuthError ? error.category : "transport_failed";
@@ -168,12 +177,14 @@ export function createFcmHttpV1Sender(input: { serviceAccount: FcmServiceAccount
         ? error instanceof FcmOAuthError ? error.transportReason ?? "unknown" : classifyFcmTransportFailure(error)
         : undefined;
       diagnose({ stage: "oauth", outcome, ...(httpStatus === undefined ? {} : { httpStatus }), ...(transportReason === undefined ? {} : { transportReason }) });
+      trace({ stage: "oauth", outcome, elapsedMs: diagnosticElapsed(started), ...(httpStatus === undefined ? {} : { httpStatus }), ...(transportReason === undefined ? {} : { transportReason }), exception: error instanceof FcmOAuthError ? error.exception : safeException(error) });
       throw error;
     }
   }
 
   async function sendPayload(payload: unknown, signal?: AbortSignal): Promise<FcmResult> {
     let stage: FcmDiagnostic["stage"] = "oauth";
+    let started = Date.now();
     try {
       if (signal?.aborted) {
         diagnose({ stage, outcome: "aborted" });
@@ -181,6 +192,7 @@ export function createFcmHttpV1Sender(input: { serviceAccount: FcmServiceAccount
       }
       const token = await oauthToken(signal);
       stage = "fcm";
+      started = Date.now();
       const response = await fetcher(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(input.serviceAccount.projectId)}/messages:send`, {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
@@ -188,6 +200,7 @@ export function createFcmHttpV1Sender(input: { serviceAccount: FcmServiceAccount
       });
       const httpStatus = responseStatus(response.status);
       diagnose({ stage, outcome: response.ok ? "accepted" : "response_rejected", ...(httpStatus === undefined ? {} : { httpStatus }) });
+      trace({ stage, outcome: response.ok ? "accepted" : "response_rejected", elapsedMs: diagnosticElapsed(started), ...(httpStatus === undefined ? {} : { httpStatus }) });
       if (response.ok) return { ok: true };
       if (response.status === 401 || response.status === 403) return { ok: false, retryable: true, category: "unauthorized" };
       if (response.status === 429) return { ok: false, retryable: true, category: "rate_limited" };
@@ -195,6 +208,7 @@ export function createFcmHttpV1Sender(input: { serviceAccount: FcmServiceAccount
       return { ok: false, retryable: false, category: "provider_rejected" };
     } catch (error) {
       if (stage === "fcm") diagnose({ stage, outcome: signal?.aborted ? "aborted" : "transport_failed", ...(signal?.aborted ? {} : { transportReason: classifyFcmTransportFailure(error) }) });
+      if (stage === "fcm") trace({ stage, outcome: signal?.aborted ? "aborted" : "transport_failed", elapsedMs: diagnosticElapsed(started), exception: safeException(error), ...(signal?.aborted ? {} : { transportReason: classifyFcmTransportFailure(error) }) });
       return { ok: false, retryable: true, category: "transient" };
     }
   }

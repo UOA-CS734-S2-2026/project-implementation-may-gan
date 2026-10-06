@@ -6,6 +6,18 @@ import { createPushOutboxHandler } from "../push-dispatcher";
 const job = { id: "push-job", eventId: "event", recipientId: "peer", conversationId: "conversation", changeSequence: "4", channel: "push" as const, deviceRegistrationId: "device", attempts: 1, leaseToken: "lease", leaseExpiresAt: new Date() };
 
 describe("FCM HTTP v1 adapter", () => {
+  it("reports safe original transport exceptions and timings in the detailed trace", async () => {
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const trace = vi.fn();
+    const sender = createFcmHttpV1Sender({
+      serviceAccount: { clientEmail: "private-email", privateKey: privateKey.export({ type: "pkcs8", format: "pem" }).toString(), projectId: "private-project" },
+      fetch: vi.fn(async () => { throw Object.assign(new TypeError("private-key private-message"), { code: "ERR_INVALID_THIS" }); }),
+      onTrace: trace,
+    });
+    await expect(sender.send({ token: "private-device", eventId: "private-event", conversationId: "private-target" })).resolves.toEqual({ ok: false, retryable: true, category: "transient" });
+    expect(trace.mock.calls[0][0]).toEqual({ stage: "oauth", outcome: "transport_failed", transportReason: "unknown", elapsedMs: expect.any(Number), exception: { errorKind: "object", errorName: "TypeError", errorCode: "ERR_INVALID_THIS", causeName: "none", causeCode: "none" } });
+    expect(JSON.stringify(trace.mock.calls)).not.toContain("private-");
+  });
   it("normalizes standard Firebase service accounts and preserves the prior Worker shape", () => {
     expect(normalizeFcmServiceAccount({ client_email: "worker@example.test", private_key: "key", project_id: "project" })).toEqual({ clientEmail: "worker@example.test", privateKey: "key", projectId: "project" });
     expect(normalizeFcmServiceAccount({ clientEmail: "worker@example.test", privateKey: "key", projectId: "project" })).toEqual({ clientEmail: "worker@example.test", privateKey: "key", projectId: "project" });

@@ -11,6 +11,7 @@ export function registerConnectRealtimeRoute(app: OpenAPIHono<AuthenticatedApiEn
       return new Response("Realtime is temporarily unavailable.", { status: 503, headers: { "Cache-Control": "no-store" } });
     }
     return connectRealtime(context.req.raw, {
+      onDiagnostic: dependencies.onDiagnostic,
       tickets: dependencies.tickets,
       resolveActiveSession: dependencies.resolveActiveSession,
       userRealtime: dependencies.userRealtime,

@@ -9,7 +9,8 @@ import {
 } from "@dayli/db";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import type { ApiEnv } from "../../../env";
-import { probeOAuthEgress, type OAuthEgressProof } from "../../../infrastructure/push/oauth-egress-probe";
+import { notificationRuntimeProof } from "../../../infrastructure/push/notification-runtime-proof";
+import { probeOAuthEgressMatrix, probeOAuthEgress, type OAuthEgressProof } from "../../../infrastructure/push/oauth-egress-probe";
 
 export interface StagingRevisionProof {
   revision: string;
@@ -30,6 +31,18 @@ export interface PostTrashWorkerFenceProof {
  * registered as an HTTP route.
  */
 export class HyperdriveIntegrationEntrypoint extends WorkerEntrypoint<ApiEnv> {
+  async diagnoseNotificationRuntime() {
+    const proof = await notificationRuntimeProof(this.env);
+    console.info("notification runtime diagnostics", proof);
+    return proof;
+  }
+
+  async diagnoseOAuthEgressMatrix() {
+    const rows = await probeOAuthEgressMatrix(this.env.API_RATE_LIMIT_SCOPE);
+    for (const row of rows) console.info("notification egress matrix", row);
+    return rows;
+  }
+
   async diagnoseOAuthEgress(): Promise<OAuthEgressProof> {
     const proof = await probeOAuthEgress(this.env.API_RATE_LIMIT_SCOPE);
     console.info("notification OAuth egress diagnostics", proof);

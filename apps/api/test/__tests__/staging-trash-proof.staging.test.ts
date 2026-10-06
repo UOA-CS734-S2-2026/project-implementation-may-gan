@@ -26,6 +26,22 @@ describe("private staging Trash attestation", () => {
     });
   });
 
+  it("reports the private runtime configuration and fixed connectivity matrix", async () => {
+    const configuration = await env.STAGING_API.diagnoseNotificationRuntime();
+    for (const [key, value] of Object.entries(configuration)) {
+      if (key === "revocationBindingFailure") expect(["none", "realtime_missing", "app_database_missing_or_invalid", "worker_database_missing_or_invalid", "database_bindings_identical", "worker_role_invalid"]).toContain(value);
+      else expect(typeof value).toBe("boolean");
+    }
+    const rows = await env.STAGING_API.diagnoseOAuthEgressMatrix();
+    expect(rows.map((row) => row.probe)).toEqual(["oauth_post_unbound", "oauth_post_bound", "oauth_form_unbound", "oauth_form_bound", "oauth_get_bound", "oauth_post_manual_redirect", "google_control", "cloudflare_control"]);
+    for (const row of rows) {
+      expect(["response_received", "transport_failed", "timed_out", "response_invalid"]).toContain(row.outcome);
+      expect(Number.isInteger(row.elapsedMs) && row.elapsedMs >= 0 && row.elapsedMs <= 60_000).toBe(true);
+      if (row.outcome === "response_received") expect(Number.isInteger(row.httpStatus) && row.httpStatus >= 100 && row.httpStatus <= 599).toBe(true);
+    }
+    console.info("staging notification diagnostic batch", { configuration, egress: rows });
+  }, 15_000);
+
   it("reports credential-free Google OAuth connectivity without making it a delivery readiness gate", async () => {
     const proof = await env.STAGING_API.diagnoseOAuthEgress();
     expect(["response_received", "transport_failed", "timed_out", "response_invalid"]).toContain(proof.outcome);

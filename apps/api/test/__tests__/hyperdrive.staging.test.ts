@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 interface HyperdriveIntegrationService {
   diagnoseOAuthEgress: () => Promise<import("../../src/infrastructure/push/oauth-egress-probe").OAuthEgressProof>;
+  diagnoseOAuthEgressMatrix: () => Promise<import("../../src/infrastructure/push/oauth-egress-probe").EgressMatrixRow[]>;
+  diagnoseNotificationRuntime: () => ReturnType<typeof import("../../src/infrastructure/push/notification-runtime-proof").notificationRuntimeProof>;
   proveConnection: () => Promise<{ ok: 1 }>;
   proveTransactions: (group: string) => Promise<{
     appRole: boolean;
