@@ -1,12 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
-import { accountPurgeControlUnavailable, createAccountPurgeDispatcher, type AccountPurgeCleanupJob } from "../account-purge";
+import { accountPurgeControlUnavailable, accountPurgeProviderIncident, createAccountPurgeDispatcher,
+  type AccountPurgeCleanupJob, type AccountPurgeReport } from "../account-purge";
 
 const job: AccountPurgeCleanupJob = { taskId: "purge-task-1", ownerId: "owner-1", lifecycleGeneration: 4, objectKey: "media/opaque", exportCleanupTaskId: null, exportUploadId: null, leaseToken: "lease-1" };
 
 function store() {
   return {
     report: vi.fn(async () => ({ due: 2, failed: 1, terminalFailed: 1, leased: 0,
-      paused: true, controlPresent: true, controlFresh: false, terminalCleanup: 0 })),
+      paused: true, controlPresent: true, controlFresh: false, terminalCleanup: 0,
+      drainState: "paused" as const, operatorEpoch: 2, startedOperations: 0, unresolvedOperations: 0,
+      safeToResume: true, externalProviderQuiescenceClaimed: false, drainUpdatedAt: new Date(), oldestStartedAt: null })),
     pruneExpiredReceipts: vi.fn(async () => 3),
     claim: vi.fn(async () => [job]),
     authorize: vi.fn(async () => true),
@@ -17,10 +20,26 @@ function store() {
 
 describe("account purge dispatcher", () => {
   it("alerts for missing or stale unpaused control even when task counts are zero", () => {
-    const empty = { due: 0, failed: 0, terminalFailed: 0, leased: 0, terminalCleanup: 0 };
+    const empty = { due: 0, failed: 0, terminalFailed: 0, leased: 0, terminalCleanup: 0,
+      drainState: "paused" as const, operatorEpoch: 2, startedOperations: 0, unresolvedOperations: 0,
+      safeToResume: true, externalProviderQuiescenceClaimed: false, drainUpdatedAt: new Date(), oldestStartedAt: null };
     expect(accountPurgeControlUnavailable({ ...empty, paused: true, controlPresent: false, controlFresh: false })).toBe(true);
     expect(accountPurgeControlUnavailable({ ...empty, paused: false, controlPresent: true, controlFresh: false })).toBe(true);
     expect(accountPurgeControlUnavailable({ ...empty, paused: true, controlPresent: true, controlFresh: false })).toBe(false);
+  });
+
+  it("surfaces incidents, unresolved permits, and prolonged drains with no due tasks", () => {
+    const now = new Date("2026-10-06T10:00:00Z");
+    const report: AccountPurgeReport = { due: 0, failed: 0, terminalFailed: 0, leased: 0,
+      paused: true, controlPresent: true, controlFresh: false, terminalCleanup: 0,
+      drainState: "paused", operatorEpoch: 4, startedOperations: 0, unresolvedOperations: 0,
+      safeToResume: true, externalProviderQuiescenceClaimed: false, drainUpdatedAt: now, oldestStartedAt: null };
+    expect(accountPurgeProviderIncident({ ...report, drainState: "incident" }, now)).toBe(true);
+    expect(accountPurgeProviderIncident({ ...report, unresolvedOperations: 1, safeToResume: false }, now)).toBe(true);
+    expect(accountPurgeProviderIncident({ ...report, drainState: "draining", startedOperations: 1,
+      safeToResume: false, oldestStartedAt: new Date(now.getTime() - 180_000) }, now)).toBe(true);
+    expect(accountPurgeProviderIncident({ ...report, drainState: "draining", startedOperations: 1,
+      safeToResume: false, oldestStartedAt: new Date(now.getTime() - 179_999) }, now)).toBe(false);
   });
 
   it("report-only is aggregate-only and never leases or reads an object key", async () => {
@@ -29,7 +48,9 @@ describe("account purge dispatcher", () => {
     await expect(createAccountPurgeDispatcher({ mode: "report_only", store: cleanup, deleter }).dispatchScheduled())
       .resolves.toEqual({ claimed: 0, objectDeletes: 0, completed: 0, rescheduled: 0, fenced: 0, receiptsPruned: 0,
         report: { due: 2, failed: 1, terminalFailed: 1, leased: 0,
-          paused: true, controlPresent: true, controlFresh: false, terminalCleanup: 0 } });
+          paused: true, controlPresent: true, controlFresh: false, terminalCleanup: 0,
+          drainState: "paused", operatorEpoch: 2, startedOperations: 0, unresolvedOperations: 0,
+          safeToResume: true, externalProviderQuiescenceClaimed: false, drainUpdatedAt: expect.any(Date), oldestStartedAt: null } });
     expect(cleanup.pruneExpiredReceipts).not.toHaveBeenCalled();
     expect(cleanup.claim).not.toHaveBeenCalled();
     expect(deleter.delete).not.toHaveBeenCalled();

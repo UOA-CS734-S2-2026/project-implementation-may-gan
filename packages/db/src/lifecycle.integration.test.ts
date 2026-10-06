@@ -552,6 +552,71 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     expect(Number(operatorReport.terminal_cleanup_count)).toBeGreaterThanOrEqual(1);
   });
 
+  it("serializes provider admission and pause in both lock orderings", async () => {
+    const owner = await createUser("permit-interleaving");
+    const reservation = `permit-interleaving-reservation-${crypto.randomUUID()}`;
+    await migrator`insert into public.media_reservation
+      (id, owner_id, object_key, content_type, byte_size, status, validated_at, expires_at)
+      values (${reservation}, ${owner}, ${`media/${owner}/${reservation}`}, 'image/jpeg', 1,
+        'validated', clock_timestamp(), '2090-01-01T00:00:00Z')`;
+    await migrator`insert into public.account_lifecycles
+      (user_id, state, request_id, idempotency_key_digest, generation, requested_at, cancel_until, purge_due_at)
+      values (${owner}, 'pending_deletion', ${crypto.randomUUID()}, ${"6".repeat(64)}, 5,
+        '2025-01-01T00:00:00Z', '2025-01-08T00:00:00Z', '2025-01-15T00:00:00Z')`;
+    const firstLease = `interleave-first-${crypto.randomUUID()}`;
+    const firstClaims = await migrator`select * from public.claim_account_purge_cleanup(10, ${firstLease}, 90)`;
+    const firstJob = firstClaims.find((job) => job.owner_id === owner)!;
+    expect(firstJob).toBeTruthy();
+    const firstPermit = `interleave-permit-${crypto.randomUUID()}`;
+    const secondWorker = postgres(migratorConnection, { max: 1, prepare: false, onnotice: () => undefined });
+    let pausePromise: Promise<unknown> | undefined;
+    let pauseSettled = false;
+    try {
+      await migrator.begin(async (transaction) => {
+        expect(await transaction`select * from public.start_account_purge_provider_operation(
+          ${firstPermit}, ${firstJob.task_id}, 5, ${firstLease}, 'delete_object',
+          clock_timestamp() + interval '30 seconds')`).toHaveLength(1);
+        const [{ generation: epoch }] = await transaction`select generation from public.account_purge_operator_control`;
+        pausePromise = secondWorker`select public.begin_account_purge_provider_pause(
+          ${epoch}, 'admission first', 'integration operator') as state`
+          .then((rows) => { pauseSettled = true; return rows; });
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(pauseSettled).toBe(false);
+      });
+      await expect(pausePromise).resolves.toEqual([{ state: "draining" }]);
+      expect(await migrator`select public.finish_account_purge_provider_operation(
+        ${firstPermit}, ${firstJob.task_id}, 5, ${firstLease}, true) as accepted`).toEqual([{ accepted: true }]);
+      expect(await migrator`select public.refresh_account_purge_provider_drain() as state`).toEqual([{ state: "paused" }]);
+      const [{ generation: pausedEpoch }] = await migrator`select generation from public.account_purge_operator_control`;
+      expect(await migrator`select public.resume_account_purge_provider_operations(${pausedEpoch},
+        clock_timestamp() + interval '5 minutes', 'between orderings', 'integration operator') as resumed`)
+        .toEqual([{ resumed: true }]);
+
+      const secondLease = `interleave-second-${crypto.randomUUID()}`;
+      const secondClaims = await migrator`select * from public.claim_account_purge_cleanup(10, ${secondLease}, 90)`;
+      const secondJob = secondClaims.find((job) => job.owner_id === owner)!;
+      expect(secondJob).toBeTruthy();
+      let startPromise: Promise<unknown> | undefined;
+      let startSettled = false;
+      await migrator.begin(async (transaction) => {
+        const [{ generation: epoch }] = await transaction`select generation from public.account_purge_operator_control`;
+        expect(await transaction`select public.begin_account_purge_provider_pause(
+          ${epoch}, 'pause first', 'integration operator') as state`).toEqual([{ state: "draining" }]);
+        startPromise = secondWorker`select * from public.start_account_purge_provider_operation(
+          ${`blocked-${crypto.randomUUID()}`}, ${secondJob.task_id}, 5, ${secondLease}, 'delete_object',
+          clock_timestamp() + interval '30 seconds')`.then((rows) => { startSettled = true; return rows; });
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(startSettled).toBe(false);
+      });
+      await expect(startPromise).resolves.toEqual([]);
+      expect(await migrator`select public.refresh_account_purge_provider_drain() as state`).toEqual([{ state: "paused" }]);
+      await migrator`update public.account_purge_object_cleanup_tasks
+        set next_attempt_at = 'infinity'::timestamptz where id = ${secondJob.task_id}`;
+    } finally {
+      await secondWorker.end({ timeout: 5 });
+    }
+  });
+
   it("drains generation-bound provider permits and makes late completion an incident", async () => {
     const owners = [await createUser("permit-first"), await createUser("permit-second")];
     for (const owner of owners) {
@@ -596,10 +661,10 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
         external_provider_quiescence_claimed: false });
       expect(Number(draining.started_operation_count)).toBe(2);
 
-      expect(await migrator`select public.finish_account_purge_provider_operation(
-        ${permits[0]}, ${jobs[0].task_id}, 3, ${lease}, true) as accepted`).toEqual([{ accepted: true }]);
       await migrator`update public.account_purge_provider_operation_permits
-        set operation_deadline = clock_timestamp() - interval '1 second' where id = ${permits[1]}`;
+        set operation_deadline = clock_timestamp() - interval '1 second' where id in (${permits[0]}, ${permits[1]})`;
+      expect(await migrator`select public.finish_account_purge_provider_operation(
+        ${permits[0]}, ${jobs[0].task_id}, 3, ${lease}, true) as accepted`).toEqual([{ accepted: false }]);
       expect(await secondWorker`select public.finish_account_purge_provider_operation(
         ${permits[1]}, ${jobs[1].task_id}, 3, ${lease}, true) as accepted`).toEqual([{ accepted: false }]);
       expect(await migrator`select public.refresh_account_purge_provider_drain() as state`)
@@ -610,8 +675,35 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
         ${incidentEpoch}, clock_timestamp() + interval '5 minutes', 'unsafe resume', 'integration operator') as resumed`)
         .toEqual([{ resumed: false }]);
       expect(await migrator`select public.reconcile_account_purge_provider_operation(
-        ${permits[1]}, 'multipart_reconciled', 'integration operator') as reconciled`)
+        ${permits[0]}, 'multipart_reconciled', 'integration operator') as reconciled`)
+        .toEqual([{ reconciled: false }]);
+      expect(await migrator`select public.reconcile_account_purge_provider_operation(
+        ${permits[0]}, 'provider_confirmed_absent', 'integration operator') as reconciled`)
         .toEqual([{ reconciled: true }]);
+      expect(await migrator`select public.reconcile_account_purge_provider_operation(
+        ${permits[1]}, 'provider_confirmed_absent', 'integration operator') as reconciled`)
+        .toEqual([{ reconciled: false }]);
+      expect(await migrator`select public.reconcile_account_purge_provider_operation(
+        ${permits[1]}, 'provider_confirmed_completed', 'integration operator') as reconciled`)
+        .toEqual([{ reconciled: false }]);
+      await migrator.begin(async (transaction) => {
+        expect(await transaction`select public.reconcile_account_purge_provider_operation(
+          ${permits[1]}, 'multipart_reconciled', 'integration operator') as reconciled`)
+          .toEqual([{ reconciled: true }]);
+        expect(await secondWorker`select public.resume_account_purge_provider_operations(
+          ${incidentEpoch}, clock_timestamp() + interval '5 minutes', 'racing resume', 'integration operator') as resumed`)
+          .toEqual([{ resumed: false }]);
+      });
+      const [closedPermit] = await migrator`select task_id is null as task_erased,
+        owner_id is null as owner_erased, worker_lease_token is null as lease_erased,
+        char_length(task_id_digest) = 64 as task_digest,
+        char_length(owner_id_digest) = 64 as owner_digest,
+        char_length(worker_lease_digest) = 64 as lease_digest,
+        retention_expires_at = resolved_at + interval '30 days' as bounded_retention,
+        resolution from public.account_purge_provider_operation_permits where id = ${permits[1]}`;
+      expect(closedPermit).toEqual({ task_erased: true, owner_erased: true, lease_erased: true,
+        task_digest: true, owner_digest: true, lease_digest: true, bounded_retention: true,
+        resolution: "multipart_reconciled" });
       expect(await migrator`select public.refresh_account_purge_provider_drain() as state`)
         .toEqual([{ state: "paused" }]);
       expect(await migrator`select public.resume_account_purge_provider_operations(
@@ -627,6 +719,15 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
         clock_timestamp() + interval '30 seconds')`).toEqual([]);
       await migrator`update public.account_purge_object_cleanup_tasks
         set next_attempt_at = 'infinity'::timestamptz where id in (${jobs[0].task_id}, ${jobs[1].task_id})`;
+      await migrator`with cutoff as (select clock_timestamp() - interval '31 days' as resolved)
+        update public.account_purge_provider_operation_permits permit
+        set resolved_at = cutoff.resolved, retention_expires_at = cutoff.resolved + interval '30 days'
+        from cutoff where permit.id = ${permits[0]}`;
+      expect(await migrator`select public.delete_expired_account_purge_provider_permits(10) as deleted`)
+        .toEqual([{ deleted: 1 }]);
+      const [retainedIncidentEvidence] = await migrator`select count(*)::integer as count
+        from public.account_purge_provider_operation_permits where id = ${permits[1]}`;
+      expect(retainedIncidentEvidence.count).toBe(1);
     } finally {
       await secondWorker.end({ timeout: 5 });
     }
@@ -640,6 +741,7 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
       "select public.refresh_account_purge_provider_drain()",
       "select public.reconcile_account_purge_provider_operation('x', 'provider_confirmed_absent', 'x')",
       "select public.resume_account_purge_provider_operations(1, clock_timestamp() + interval '1 minute', 'x', 'x')",
+      "select public.delete_expired_account_purge_provider_permits(1)",
     ];
     for (const client of [app, lifecycleWorker]) {
       for (const call of calls) await expect(client.unsafe(call)).rejects.toMatchObject({ code: "42501" });

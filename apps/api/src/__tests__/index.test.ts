@@ -10,6 +10,9 @@ const send = vi.fn(async (actorId: string, conversationId: string) => ({
 }));
 const dispatchImmediately = vi.fn(async () => undefined);
 const createAppForEnv = vi.fn();
+const runAccountPurgeReportForEnv = vi.fn();
+
+vi.mock("../infrastructure/jobs/account-purge-runtime", () => ({ runAccountPurgeReportForEnv }));
 
 vi.mock("../app", async () => {
   const actual = await vi.importActual<typeof import("../app")>("../app");
@@ -23,7 +26,7 @@ vi.mock("../app", async () => {
   return { ...actual, createAppForEnv };
 });
 
-const { default: worker } = await import("../index");
+const { default: worker, runAccountPurgeReportMaintenance } = await import("../index");
 
 describe("Worker fetch entrypoint", () => {
   it.each(["agroupforcoders.com", "external.workers.dev", ""])("rejects public Worker traffic %j before app construction", async (marker) => {
@@ -40,6 +43,25 @@ describe("Worker fetch entrypoint", () => {
     expect(createAppForEnv).not.toHaveBeenCalled();
     expect(send).not.toHaveBeenCalled();
   });
+  it("logs provider incidents even when every task count is zero", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    runAccountPurgeReportForEnv.mockResolvedValueOnce({ claimed: 0, objectDeletes: 0, completed: 0,
+      rescheduled: 0, fenced: 0, receiptsPruned: 0, report: {
+        due: 0, failed: 0, terminalFailed: 0, leased: 0, paused: true, controlPresent: true,
+        controlFresh: false, terminalCleanup: 0, drainState: "incident", operatorEpoch: 7,
+        startedOperations: 0, unresolvedOperations: 1, safeToResume: false,
+        externalProviderQuiescenceClaimed: false, drainUpdatedAt: new Date(), oldestStartedAt: null,
+      } });
+    try {
+      await runAccountPurgeReportMaintenance({} as import("../env").ApiEnv);
+      expect(error).toHaveBeenCalledWith("account purge provider drain requires attention", expect.objectContaining({
+        report: expect.objectContaining({ drainState: "incident", unresolvedOperations: 1 }),
+      }));
+    } finally {
+      error.mockRestore();
+    }
+  });
+
   it("forwards the execution context so a successful write retains waitUntil work", async () => {
     send.mockClear();
     dispatchImmediately.mockClear();

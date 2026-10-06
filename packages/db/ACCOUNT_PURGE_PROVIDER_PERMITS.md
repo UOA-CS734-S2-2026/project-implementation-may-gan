@@ -10,7 +10,9 @@ The singleton control row moves through `active`, `draining`, `paused`, and `inc
 
 Workers must acknowledge a provider response with `finish_account_purge_provider_operation`. A response after the permit deadline, worker crash, timeout, or uncertain multipart abort becomes `unresolved`. `refresh_account_purge_provider_drain` then puts the control in `incident`. Resume is rejected while any permit is started or unresolved.
 
-An authenticated database owner must investigate R2 and call `reconcile_account_purge_provider_operation` with provider evidence. Multipart aborts require multipart reconciliation. A finite object-absence check is not represented as proof that no late provider operation can complete. The report therefore always returns `external_provider_quiescence_claimed = false`, even when database admission is fully drained.
+An authenticated database owner must investigate R2 and call `reconcile_account_purge_provider_operation` with provider evidence. Resolution values are operation-bound. In particular, `abort_export_multipart` accepts only `multipart_reconciled`. A finite object-absence check is not represented as proof that no late provider operation can complete. The report therefore always returns `external_provider_quiescence_claimed = false`, even when database admission is fully drained.
+
+Raw task, owner, and lease identifiers exist only while a permit is started. Completion, failure, expiry, and reconciliation erase them and retain SHA-256 digests for correlation. Closed permits expire after 30 absolute days and can be deleted in bounded owner-only batches. Unresolved incidents have no automatic retention deadline. They must be reconciled first so evidence is never silently discarded.
 
 ## Current release posture
 

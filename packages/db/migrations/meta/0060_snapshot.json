@@ -1,5 +1,5 @@
 {
-  "id": "aa328cfa-9b7e-4b53-9672-17d35b91dc16",
+  "id": "778fb000-4878-40f1-b965-854810fca8c1",
   "prevId": "065ec380-0898-4ccb-8059-789e64fbb2e1",
   "version": "7",
   "dialect": "postgresql",
@@ -1061,10 +1061,22 @@
           "name": "task_id",
           "type": "text",
           "primaryKey": false,
+          "notNull": false
+        },
+        "task_id_digest": {
+          "name": "task_id_digest",
+          "type": "text",
+          "primaryKey": false,
           "notNull": true
         },
         "owner_id": {
           "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "owner_id_digest": {
+          "name": "owner_id_digest",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -1083,6 +1095,12 @@
         },
         "worker_lease_token": {
           "name": "worker_lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "worker_lease_digest": {
+          "name": "worker_lease_digest",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -1122,6 +1140,18 @@
         "resolution": {
           "name": "resolution",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reconciled_actor_digest": {
+          "name": "reconciled_actor_digest",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "retention_expires_at": {
+          "name": "retention_expires_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         }
@@ -1170,9 +1200,13 @@
           "name": "account_purge_provider_permits_status_check",
           "value": "\"account_purge_provider_operation_permits\".\"status\" in ('started', 'completed', 'failed', 'unresolved', 'reconciled')"
         },
+        "account_purge_provider_permits_digest_check": {
+          "name": "account_purge_provider_permits_digest_check",
+          "value": "\n    char_length(\"account_purge_provider_operation_permits\".\"task_id_digest\") = 64 and char_length(\"account_purge_provider_operation_permits\".\"owner_id_digest\") = 64\n      and char_length(\"account_purge_provider_operation_permits\".\"worker_lease_digest\") = 64\n      and (\"account_purge_provider_operation_permits\".\"reconciled_actor_digest\" is null or char_length(\"account_purge_provider_operation_permits\".\"reconciled_actor_digest\") = 64)\n  "
+        },
         "account_purge_provider_permits_resolution_check": {
           "name": "account_purge_provider_permits_resolution_check",
-          "value": "\n    (\"account_purge_provider_operation_permits\".\"status\" = 'started' and \"account_purge_provider_operation_permits\".\"resolved_at\" is null and \"account_purge_provider_operation_permits\".\"resolution\" is null) or\n    (\"account_purge_provider_operation_permits\".\"status\" in ('completed', 'failed') and \"account_purge_provider_operation_permits\".\"resolved_at\" is not null and \"account_purge_provider_operation_permits\".\"resolution\" is not null) or\n    (\"account_purge_provider_operation_permits\".\"status\" = 'unresolved' and \"account_purge_provider_operation_permits\".\"resolved_at\" is null and \"account_purge_provider_operation_permits\".\"resolution\" is not null) or\n    (\"account_purge_provider_operation_permits\".\"status\" = 'reconciled' and \"account_purge_provider_operation_permits\".\"resolved_at\" is not null and \"account_purge_provider_operation_permits\".\"resolution\" is not null)\n  "
+          "value": "\n    (\"account_purge_provider_operation_permits\".\"status\" = 'started' and \"account_purge_provider_operation_permits\".\"task_id\" is not null and \"account_purge_provider_operation_permits\".\"owner_id\" is not null\n      and \"account_purge_provider_operation_permits\".\"worker_lease_token\" is not null and \"account_purge_provider_operation_permits\".\"resolved_at\" is null and \"account_purge_provider_operation_permits\".\"resolution\" is null\n      and \"account_purge_provider_operation_permits\".\"retention_expires_at\" is null) or\n    (\"account_purge_provider_operation_permits\".\"status\" in ('completed', 'failed', 'reconciled') and \"account_purge_provider_operation_permits\".\"task_id\" is null and \"account_purge_provider_operation_permits\".\"owner_id\" is null\n      and \"account_purge_provider_operation_permits\".\"worker_lease_token\" is null and \"account_purge_provider_operation_permits\".\"resolved_at\" is not null and \"account_purge_provider_operation_permits\".\"resolution\" is not null\n      and \"account_purge_provider_operation_permits\".\"retention_expires_at\" = \"account_purge_provider_operation_permits\".\"resolved_at\" + interval '30 days') or\n    (\"account_purge_provider_operation_permits\".\"status\" = 'unresolved' and \"account_purge_provider_operation_permits\".\"task_id\" is null and \"account_purge_provider_operation_permits\".\"owner_id\" is null\n      and \"account_purge_provider_operation_permits\".\"worker_lease_token\" is null and \"account_purge_provider_operation_permits\".\"resolved_at\" is null and \"account_purge_provider_operation_permits\".\"resolution\" is not null\n      and \"account_purge_provider_operation_permits\".\"retention_expires_at\" is null)\n  "
         }
       },
       "isRLSEnabled": false
