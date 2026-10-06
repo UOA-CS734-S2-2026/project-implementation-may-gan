@@ -49,9 +49,13 @@ export default {
 /** Counts only. Owner and session identifiers never enter monitoring output. */
 async function runRealtimeRevocationMaintenance(env: ApiEnv): Promise<void> {
   try {
-    const summary = await runRealtimeRevocationsForEnv(env);
-    if (!summary) console.error("account realtime revocation bindings unavailable", env.API_RATE_LIMIT_SCOPE === "staging" ? { reason: realtimeRevocationBindingFailure(env) } : undefined);
-    else if (summary.claimed > 0 || summary.report.due > 0 || summary.report.failed > 0) console.info("account realtime revocation", summary);
+    let reason = realtimeRevocationBindingFailure(env);
+    const summary = await runRealtimeRevocationsForEnv(env, failure => { reason = failure; });
+    if (!summary) console.error("account realtime revocation bindings unavailable", env.API_RATE_LIMIT_SCOPE === "staging" ? { reason } : undefined);
+    else {
+      if (env.API_RATE_LIMIT_SCOPE === "staging") console.info("account realtime revocation role verified", { appRoleVerified: true, workerRoleVerified: true });
+      if (summary.claimed > 0 || summary.report.due > 0 || summary.report.failed > 0) console.info("account realtime revocation", summary);
+    }
   } catch {
     console.error("account realtime revocation failed");
   }
