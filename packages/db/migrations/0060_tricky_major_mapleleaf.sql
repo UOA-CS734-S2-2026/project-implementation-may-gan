@@ -3,26 +3,41 @@ SET lock_timeout = '5s';--> statement-breakpoint
 SET statement_timeout = '5min';--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "account_purge_provider_operation_permits" (
 	"id" text PRIMARY KEY NOT NULL,
-	"task_id" text NOT NULL,
-	"owner_id" text NOT NULL,
+	"task_id" text,
+	"task_id_digest" text NOT NULL,
+	"owner_id" text,
+	"owner_id_digest" text NOT NULL,
 	"lifecycle_generation" bigint NOT NULL,
 	"operator_epoch" bigint NOT NULL,
-	"worker_lease_token" text NOT NULL,
+	"worker_lease_token" text,
+	"worker_lease_digest" text NOT NULL,
 	"operation" text NOT NULL,
 	"status" text DEFAULT 'started' NOT NULL,
 	"operation_deadline" timestamp with time zone NOT NULL,
 	"started_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"resolved_at" timestamp with time zone,
 	"resolution" text,
+	"reconciled_actor_digest" text,
+	"retention_expires_at" timestamp with time zone,
 	CONSTRAINT "account_purge_provider_permits_generation_check" CHECK ("account_purge_provider_operation_permits"."lifecycle_generation" between 1 and 9007199254740991),
 	CONSTRAINT "account_purge_provider_permits_epoch_check" CHECK ("account_purge_provider_operation_permits"."operator_epoch" > 0),
 	CONSTRAINT "account_purge_provider_permits_operation_check" CHECK ("account_purge_provider_operation_permits"."operation" in ('delete_object', 'abort_export_multipart', 'verify_object_absent')),
 	CONSTRAINT "account_purge_provider_permits_status_check" CHECK ("account_purge_provider_operation_permits"."status" in ('started', 'completed', 'failed', 'unresolved', 'reconciled')),
+	CONSTRAINT "account_purge_provider_permits_digest_check" CHECK (
+    char_length("account_purge_provider_operation_permits"."task_id_digest") = 64 and char_length("account_purge_provider_operation_permits"."owner_id_digest") = 64
+      and char_length("account_purge_provider_operation_permits"."worker_lease_digest") = 64
+      and ("account_purge_provider_operation_permits"."reconciled_actor_digest" is null or char_length("account_purge_provider_operation_permits"."reconciled_actor_digest") = 64)
+  ),
 	CONSTRAINT "account_purge_provider_permits_resolution_check" CHECK (
-    ("account_purge_provider_operation_permits"."status" = 'started' and "account_purge_provider_operation_permits"."resolved_at" is null and "account_purge_provider_operation_permits"."resolution" is null) or
-    ("account_purge_provider_operation_permits"."status" in ('completed', 'failed') and "account_purge_provider_operation_permits"."resolved_at" is not null and "account_purge_provider_operation_permits"."resolution" is not null) or
-    ("account_purge_provider_operation_permits"."status" = 'unresolved' and "account_purge_provider_operation_permits"."resolved_at" is null and "account_purge_provider_operation_permits"."resolution" is not null) or
-    ("account_purge_provider_operation_permits"."status" = 'reconciled' and "account_purge_provider_operation_permits"."resolved_at" is not null and "account_purge_provider_operation_permits"."resolution" is not null)
+    ("account_purge_provider_operation_permits"."status" = 'started' and "account_purge_provider_operation_permits"."task_id" is not null and "account_purge_provider_operation_permits"."owner_id" is not null
+      and "account_purge_provider_operation_permits"."worker_lease_token" is not null and "account_purge_provider_operation_permits"."resolved_at" is null and "account_purge_provider_operation_permits"."resolution" is null
+      and "account_purge_provider_operation_permits"."retention_expires_at" is null) or
+    ("account_purge_provider_operation_permits"."status" in ('completed', 'failed', 'reconciled') and "account_purge_provider_operation_permits"."task_id" is null and "account_purge_provider_operation_permits"."owner_id" is null
+      and "account_purge_provider_operation_permits"."worker_lease_token" is null and "account_purge_provider_operation_permits"."resolved_at" is not null and "account_purge_provider_operation_permits"."resolution" is not null
+      and "account_purge_provider_operation_permits"."retention_expires_at" = "account_purge_provider_operation_permits"."resolved_at" + interval '30 days') or
+    ("account_purge_provider_operation_permits"."status" = 'unresolved' and "account_purge_provider_operation_permits"."task_id" is null and "account_purge_provider_operation_permits"."owner_id" is null
+      and "account_purge_provider_operation_permits"."worker_lease_token" is null and "account_purge_provider_operation_permits"."resolved_at" is null and "account_purge_provider_operation_permits"."resolution" is not null
+      and "account_purge_provider_operation_permits"."retention_expires_at" is null)
   )
 );
 --> statement-breakpoint
@@ -78,11 +93,15 @@ BEGIN
   IF NOT FOUND THEN RETURN; END IF;
 
   INSERT INTO public.account_purge_provider_operation_permits
-    (id, task_id, owner_id, lifecycle_generation, operator_epoch,
-      worker_lease_token, operation, operation_deadline, started_at)
-  VALUES (p_permit_id, p_task_id, v_owner_id, p_lifecycle_generation,
-    v_control.generation, p_worker_lease_token, p_operation,
-    p_operation_deadline, v_now);
+    (id, task_id, task_id_digest, owner_id, owner_id_digest,
+      lifecycle_generation, operator_epoch, worker_lease_token, worker_lease_digest,
+      operation, operation_deadline, started_at)
+  VALUES (p_permit_id, p_task_id,
+    encode(sha256(convert_to(p_task_id, 'UTF8')), 'hex'), v_owner_id,
+    encode(sha256(convert_to(v_owner_id, 'UTF8')), 'hex'), p_lifecycle_generation,
+    v_control.generation, p_worker_lease_token,
+    encode(sha256(convert_to(p_worker_lease_token, 'UTF8')), 'hex'),
+    p_operation, p_operation_deadline, v_now);
   RETURN QUERY SELECT p_permit_id, v_control.generation, p_operation_deadline;
 EXCEPTION WHEN unique_violation THEN
   RETURN;
@@ -107,7 +126,10 @@ BEGIN
       WHEN p_succeeded THEN 'completed' ELSE 'failed' END,
     resolved_at = CASE WHEN permit.operation_deadline <= v_now THEN NULL ELSE v_now END,
     resolution = CASE WHEN permit.operation_deadline <= v_now THEN 'late_provider_response_requires_reconciliation'
-      WHEN p_succeeded THEN 'provider_acknowledged_success' ELSE 'provider_acknowledged_failure' END
+      WHEN p_succeeded THEN 'provider_acknowledged_success' ELSE 'provider_acknowledged_failure' END,
+    retention_expires_at = CASE WHEN permit.operation_deadline <= v_now THEN NULL
+      ELSE v_now + interval '30 days' END,
+    task_id = NULL, owner_id = NULL, worker_lease_token = NULL
   WHERE permit.id = p_permit_id AND permit.task_id = p_task_id
     AND permit.lifecycle_generation = p_lifecycle_generation
     AND permit.worker_lease_token = p_worker_lease_token AND permit.status = 'started';
@@ -160,7 +182,8 @@ BEGIN
   PERFORM 1 FROM public.account_purge_operator_control WHERE singleton FOR UPDATE;
   IF NOT FOUND THEN RETURN 'missing_control'; END IF;
   UPDATE public.account_purge_provider_operation_permits
-  SET status = 'unresolved', resolution = 'operation_deadline_expired_requires_provider_reconciliation'
+  SET status = 'unresolved', resolution = 'operation_deadline_expired_requires_provider_reconciliation',
+    task_id = NULL, owner_id = NULL, worker_lease_token = NULL
   WHERE status = 'started' AND operation_deadline <= v_now;
   SELECT count(*) FILTER (WHERE status = 'started'), count(*) FILTER (WHERE status = 'unresolved')
     INTO v_started, v_unresolved FROM public.account_purge_provider_operation_permits;
@@ -176,14 +199,20 @@ CREATE FUNCTION public.reconcile_account_purge_provider_operation(
   p_permit_id text, p_resolution text, p_actor text
 ) RETURNS boolean
 LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
+DECLARE v_now timestamptz := clock_timestamp();
 BEGIN
-  IF p_resolution NOT IN ('provider_confirmed_completed', 'provider_confirmed_absent',
-      'provider_confirmed_not_started', 'multipart_reconciled')
-    OR p_actor IS NULL OR char_length(p_actor) NOT BETWEEN 1 AND 200 THEN RETURN false; END IF;
-  UPDATE public.account_purge_provider_operation_permits
-  SET status = 'reconciled', resolved_at = clock_timestamp(),
-    resolution = p_resolution || ':actor=' || p_actor
-  WHERE id = p_permit_id AND status = 'unresolved';
+  IF p_actor IS NULL OR char_length(p_actor) NOT BETWEEN 1 AND 200 THEN RETURN false; END IF;
+  UPDATE public.account_purge_provider_operation_permits permit
+  SET status = 'reconciled', resolved_at = v_now, resolution = p_resolution,
+    reconciled_actor_digest = encode(sha256(convert_to(p_actor, 'UTF8')), 'hex'),
+    retention_expires_at = v_now + interval '30 days'
+  WHERE permit.id = p_permit_id AND permit.status = 'unresolved' AND (
+    (permit.operation = 'abort_export_multipart' AND p_resolution = 'multipart_reconciled') OR
+    (permit.operation = 'delete_object' AND p_resolution IN
+      ('provider_confirmed_completed', 'provider_confirmed_absent', 'provider_confirmed_not_started')) OR
+    (permit.operation = 'verify_object_absent' AND p_resolution IN
+      ('provider_confirmed_absent', 'provider_confirmed_not_started'))
+  );
   RETURN FOUND;
 END;
 $$;--> statement-breakpoint
@@ -287,7 +316,8 @@ CREATE FUNCTION public.report_account_purge_operator_control()
 RETURNS TABLE(paused boolean, control_present boolean, control_fresh boolean,
   terminal_cleanup_count bigint, drain_state text, operator_epoch bigint,
   started_operation_count bigint, unresolved_operation_count bigint,
-  safe_to_resume boolean, external_provider_quiescence_claimed boolean)
+  safe_to_resume boolean, external_provider_quiescence_claimed boolean,
+  drain_updated_at timestamptz, oldest_started_at timestamptz)
 LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
   SELECT coalesce(bool_and(control.paused), true), count(*) = 1,
     coalesce(bool_and(NOT control.paused AND control.drain_state = 'active'
@@ -301,11 +331,35 @@ LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
     coalesce(bool_and(control.paused AND control.drain_state = 'paused'), false)
       AND NOT EXISTS (SELECT 1 FROM public.account_purge_provider_operation_permits
         WHERE status IN ('started', 'unresolved')),
-    false
+    false, max(control.updated_at),
+    (SELECT min(started_at) FROM public.account_purge_provider_operation_permits WHERE status = 'started')
   FROM public.account_purge_operator_control control WHERE control.singleton;
 $$;--> statement-breakpoint
 REVOKE ALL ON FUNCTION public.report_account_purge_operator_control() FROM PUBLIC, app, lifecycle_worker;--> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.report_account_purge_operator_control() TO lifecycle_worker;--> statement-breakpoint
+
+-- Closed permit evidence contains only digests and bounded operational state.
+-- Unresolved incidents are never age-deleted. Owner review must reconcile them.
+CREATE FUNCTION public.delete_expired_account_purge_provider_permits(p_limit integer)
+RETURNS integer
+LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
+DECLARE v_deleted integer;
+BEGIN
+  IF p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 1000 THEN RETURN 0; END IF;
+  WITH expired AS (
+    SELECT id FROM public.account_purge_provider_operation_permits
+    WHERE status IN ('completed', 'failed', 'reconciled')
+      AND retention_expires_at <= clock_timestamp()
+    ORDER BY retention_expires_at, id FOR UPDATE SKIP LOCKED LIMIT p_limit
+  )
+  DELETE FROM public.account_purge_provider_operation_permits permit
+  USING expired WHERE permit.id = expired.id;
+  GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  RETURN v_deleted;
+END;
+$$;--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.delete_expired_account_purge_provider_permits(integer)
+  FROM PUBLIC, app, lifecycle_worker;--> statement-breakpoint
 
 -- Explicitly retain report-only runtime posture.
 REVOKE ALL ON FUNCTION public.start_account_purge_provider_operation(text, text, bigint, text, text, timestamptz) FROM app, lifecycle_worker;--> statement-breakpoint
@@ -313,4 +367,5 @@ REVOKE ALL ON FUNCTION public.finish_account_purge_provider_operation(text, text
 REVOKE ALL ON FUNCTION public.begin_account_purge_provider_pause(bigint, text, text) FROM app, lifecycle_worker;--> statement-breakpoint
 REVOKE ALL ON FUNCTION public.refresh_account_purge_provider_drain() FROM app, lifecycle_worker;--> statement-breakpoint
 REVOKE ALL ON FUNCTION public.reconcile_account_purge_provider_operation(text, text, text) FROM app, lifecycle_worker;--> statement-breakpoint
-REVOKE ALL ON FUNCTION public.resume_account_purge_provider_operations(bigint, timestamptz, text, text) FROM app, lifecycle_worker;
+REVOKE ALL ON FUNCTION public.resume_account_purge_provider_operations(bigint, timestamptz, text, text) FROM app, lifecycle_worker;--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.delete_expired_account_purge_provider_permits(integer) FROM app, lifecycle_worker;

@@ -14,9 +14,23 @@ export interface AccountPurgeReport {
   controlPresent: boolean;
   controlFresh: boolean;
   terminalCleanup: number;
+  drainState: "active" | "draining" | "paused" | "incident";
+  operatorEpoch: number;
+  startedOperations: number;
+  unresolvedOperations: number;
+  safeToResume: boolean;
+  externalProviderQuiescenceClaimed: boolean;
+  drainUpdatedAt: Date | null;
+  oldestStartedAt: Date | null;
 }
 export function accountPurgeControlUnavailable(report: AccountPurgeReport): boolean {
   return !report.controlPresent || (!report.paused && !report.controlFresh);
+}
+
+export function accountPurgeProviderIncident(report: AccountPurgeReport, now = new Date()): boolean {
+  if (report.drainState === "incident" || report.unresolvedOperations > 0) return true;
+  return report.drainState === "draining" && report.startedOperations > 0
+    && (!report.oldestStartedAt || now.getTime() - report.oldestStartedAt.getTime() >= 3 * 60_000);
 }
 
 export interface AccountPurgeCleanupJob {
@@ -46,12 +60,22 @@ export function createAccountPurgeStore(database: DayliDatabase): AccountPurgeSt
         due: sql<number>`due_count`, failed: sql<number>`failed_count`, terminalFailed: sql<number>`terminal_failed_count`, leased: sql<number>`leased_count`,
         paused: sql<boolean>`paused`, controlPresent: sql<boolean>`control_present`,
         controlFresh: sql<boolean>`control_fresh`, terminalCleanup: sql<number>`terminal_cleanup_count`,
+        drainState: sql<AccountPurgeReport["drainState"]>`drain_state`, operatorEpoch: sql<number>`operator_epoch`,
+        startedOperations: sql<number>`started_operation_count`, unresolvedOperations: sql<number>`unresolved_operation_count`,
+        safeToResume: sql<boolean>`safe_to_resume`,
+        externalProviderQuiescenceClaimed: sql<boolean>`external_provider_quiescence_claimed`,
+        drainUpdatedAt: sql<Date | null>`drain_updated_at`, oldestStartedAt: sql<Date | null>`oldest_started_at`,
       }).from(sql`public.report_account_purge_cleanup()`)
         .crossJoin(sql`public.report_account_purge_operator_control()`);
       return {
         due: Number(row?.due ?? 0), failed: Number(row?.failed ?? 0), terminalFailed: Number(row?.terminalFailed ?? 0), leased: Number(row?.leased ?? 0),
         paused: row?.paused !== false, controlPresent: row?.controlPresent === true,
         controlFresh: row?.controlFresh === true, terminalCleanup: Number(row?.terminalCleanup ?? 0),
+        drainState: row?.drainState ?? "incident", operatorEpoch: Number(row?.operatorEpoch ?? 0),
+        startedOperations: Number(row?.startedOperations ?? 0),
+        unresolvedOperations: Number(row?.unresolvedOperations ?? 0), safeToResume: row?.safeToResume === true,
+        externalProviderQuiescenceClaimed: row?.externalProviderQuiescenceClaimed === true,
+        drainUpdatedAt: row?.drainUpdatedAt ?? null, oldestStartedAt: row?.oldestStartedAt ?? null,
       };
     },
     async pruneExpiredReceipts(limit) {
