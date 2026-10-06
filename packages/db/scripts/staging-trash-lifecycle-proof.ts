@@ -5,6 +5,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { AwsClient } from "aws4fetch";
 import postgres, { type Sql, type TransactionSql } from "postgres";
+// @ts-expect-error The validated runtime helper is an ESM script without a declaration file.
 import { validateStagingOrigins } from "../../../scripts/staging-origins.mjs";
 
 const shaPattern = /^[a-f0-9]{40}$/;
@@ -341,13 +342,15 @@ export async function seedPastDeadline(tx: TransactionSql, input: Fixture & { ma
   }
   const updated = await tx`
     with seeded as (select clock_timestamp() - interval '337 hours' as trashed_at)
-    update public.posts set trashed_at = seeded.trashed_at,
+    update public.posts as post set trashed_at = seeded.trashed_at,
       restore_until = seeded.trashed_at + interval '168 hours',
       trash_purge_due_at = seeded.trashed_at + interval '336 hours', updated_at = clock_timestamp()
-    from seeded where id = ${input.postId} and author_id = ${input.ownerId} and trash_generation = ${input.generation}
-      and trashed_at is not null and restore_until > clock_timestamp() and trash_purge_due_at > clock_timestamp()
-      and trash_lease_token is null and trash_lease_expires_at is null
-      and trash_failure_category is null and trash_next_attempt_at is null`;
+    from seeded where post.id = ${input.postId} and post.author_id = ${input.ownerId}
+      and post.trash_generation = ${input.generation}
+      and post.trashed_at is not null and post.restore_until > clock_timestamp()
+      and post.trash_purge_due_at > clock_timestamp()
+      and post.trash_lease_token is null and post.trash_lease_expires_at is null
+      and post.trash_failure_category is null and post.trash_next_attempt_at is null`;
   if (updated.count !== 1) throw new Error("Synthetic deadline seed did not update exactly one row.");
   return expectedKey;
 }
