@@ -19,7 +19,7 @@ describe("private staging OAuth egress probe", () => {
     expect(result).toEqual({ outcome: "response_received", httpStatus: 400 });
     expect(fetcher).toHaveBeenCalledWith("https://oauth2.googleapis.com/token", {
       method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: "grant_type=diagnostic_invalid", redirect: "error", signal: expect.any(AbortSignal),
+      body: "grant_type=diagnostic_invalid", redirect: "manual", signal: expect.any(AbortSignal),
     });
     expect(json).not.toHaveBeenCalled();
     expect(text).not.toHaveBeenCalled();

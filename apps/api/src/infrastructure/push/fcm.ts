@@ -122,7 +122,9 @@ export async function requestFcmOAuthToken(input: {
     response = await fetcher("https://oauth2.googleapis.com/token", {
       method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
-      redirect: "error",
+      // The deployed Worker rejects error mode. Manual returns redirects without
+      // forwarding the assertion or credentials to another destination.
+      redirect: "manual",
       signal: input.signal,
     });
   } catch (error) {
@@ -196,12 +198,13 @@ export function createFcmHttpV1Sender(input: { serviceAccount: FcmServiceAccount
       const response = await fetcher(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(input.serviceAccount.projectId)}/messages:send`, {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify(payload), signal,
+        body: JSON.stringify(payload), redirect: "manual", signal,
       });
       const httpStatus = responseStatus(response.status);
       diagnose({ stage, outcome: response.ok ? "accepted" : "response_rejected", ...(httpStatus === undefined ? {} : { httpStatus }) });
       trace({ stage, outcome: response.ok ? "accepted" : "response_rejected", elapsedMs: diagnosticElapsed(started), ...(httpStatus === undefined ? {} : { httpStatus }) });
       if (response.ok) return { ok: true };
+      if (response.status >= 300 && response.status < 400) return { ok: false, retryable: true, category: "transient" };
       if (response.status === 401 || response.status === 403) return { ok: false, retryable: true, category: "unauthorized" };
       if (response.status === 429) return { ok: false, retryable: true, category: "rate_limited" };
       if (response.status >= 500) return { ok: false, retryable: true, category: "transient" };
