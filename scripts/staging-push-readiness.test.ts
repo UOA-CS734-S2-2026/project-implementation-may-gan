@@ -72,8 +72,26 @@ test("OAuth readiness calls only the token endpoint and excludes credential data
   });
   assert.equal(result.exitCode, 0);
   assert.deepEqual(requests.map(({ url }) => url), ["https://oauth2.googleapis.com/token"]);
-  assert.equal(requests[0].options?.redirect, "error");
+  assert.equal(requests[0].options?.redirect, "manual");
   assert.deepEqual(artifact.checks, ["oauth_token_acquired"]);
+});
+
+test("OAuth readiness rejects returned redirects without following or exposing them", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  let requests = 0;
+  const { result, artifact } = await readiness({
+    sourceCredentials: credentials(privateKey.export({ type: "pkcs8", format: "pem" }).toString()),
+    fetchImpl: async (url, options) => {
+      requests++;
+      assert.equal(String(url), "https://oauth2.googleapis.com/token");
+      assert.equal(options?.redirect, "manual");
+      return new Response(null, { status: 307, headers: { location: "https://untrusted.example/private-redirect-sentinel" } });
+    },
+  });
+  assert.equal(requests, 1);
+  assert.equal(result.exitCode, 1);
+  assert.deepEqual(artifact.checks, ["oauth_response_rejected"]);
+  assert.equal(JSON.stringify(artifact).includes("private-redirect-sentinel"), false);
 });
 
 test("signing, provider response, and transport failures stay sanitized", async () => {
