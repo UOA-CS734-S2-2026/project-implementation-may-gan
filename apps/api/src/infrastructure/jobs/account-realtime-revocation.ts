@@ -1,4 +1,5 @@
-import { createHyperdriveDatabase, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { sql, type DayliDatabase } from "@dayli/db";
+import { maintenanceDatabaseBindingFailure, withLifecycleWorkerDatabase, type MaintenanceBindingFailure, type MaintenanceRoleFailure } from "./lifecycle-worker-database";
 import type { ApiEnv } from "../../env";
 import { retryDelayMs } from "./dispatch-outbox";
 
@@ -147,37 +148,25 @@ async function withTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise
   } finally { if (timer) clearTimeout(timer); }
 }
 
-function connectionString(binding: HyperdriveBinding | undefined): string | undefined {
-  const value = binding?.connectionString;
-  return typeof value === "string" && value.trim() === value && value.length > 0 ? value : undefined;
-}
-
-function isLifecycleWorker(value: string): boolean {
-  try { return decodeURIComponent(new URL(value).username) === "lifecycle_worker"; }
-  catch { return false; }
-}
-
-export type RealtimeRevocationBindingFailure = "realtime_missing" | "app_database_missing_or_invalid" | "worker_database_missing_or_invalid" | "database_bindings_identical" | "worker_role_invalid";
+export type RealtimeRevocationBindingFailure = "realtime_missing" | MaintenanceBindingFailure | MaintenanceRoleFailure;
 
 /** Fixed reasons only. Never expose connection strings or their credentials. */
 export function realtimeRevocationBindingFailure(env: Partial<ApiEnv>): RealtimeRevocationBindingFailure | undefined {
   if (!env.USER_REALTIME) return "realtime_missing";
-  const app = connectionString(env.HYPERDRIVE);
-  const worker = connectionString(env.EXPORT_WORKER_HYPERDRIVE);
-  if (!app) return "app_database_missing_or_invalid";
-  if (!worker) return "worker_database_missing_or_invalid";
-  if (app === worker) return "database_bindings_identical";
-  if (!isLifecycleWorker(worker)) return "worker_role_invalid";
-  return undefined;
+  return maintenanceDatabaseBindingFailure(env);
 }
 
 /** Safe scheduled side effect. It cannot purge content or enable deletion requests. */
-export async function runRealtimeRevocationsForEnv(env: Partial<ApiEnv>): Promise<RealtimeRevocationSummary | null> {
-  if (realtimeRevocationBindingFailure(env)) return null;
-  const database = createHyperdriveDatabase(env.EXPORT_WORKER_HYPERDRIVE!);
-  try {
-    return await createRealtimeRevocationDispatcher({
-      store: createRealtimeRevocationStore(database.db), namespace: env.USER_REALTIME!,
-    }).dispatchScheduled();
-  } finally { await database.close(); }
+export async function runRealtimeRevocationsForEnv(
+  env: Partial<ApiEnv>,
+  onRejected?: (reason: RealtimeRevocationBindingFailure) => void,
+): Promise<RealtimeRevocationSummary | null> {
+  const failure = realtimeRevocationBindingFailure(env);
+  if (failure) {
+    try { onRejected?.(failure); } catch { /* Keep invalid bindings fail closed. */ }
+    return null;
+  }
+  return withLifecycleWorkerDatabase(env, async database => createRealtimeRevocationDispatcher({
+    store: createRealtimeRevocationStore(database), namespace: env.USER_REALTIME!,
+  }).dispatchScheduled(), onRejected);
 }

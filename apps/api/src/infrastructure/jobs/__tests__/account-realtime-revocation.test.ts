@@ -34,7 +34,7 @@ describe("account realtime revocation bindings", () => {
     ["realtime_missing", { USER_REALTIME: undefined }],
     ["app_database_missing_or_invalid", { HYPERDRIVE: undefined }],
     ["worker_database_missing_or_invalid", { EXPORT_WORKER_HYPERDRIVE: undefined }],
-    ["worker_role_invalid", { EXPORT_WORKER_HYPERDRIVE: { connectionString: "postgres://app:private-password@worker-host/db" } }],
+    ["worker_database_missing_or_invalid", { EXPORT_WORKER_HYPERDRIVE: { connectionString: "not-a-database-url" } }],
   ] as const)("reports only %s and performs no database work", async (expected, override) => {
     const env = { ...bindings(), ...override } as Partial<ApiEnv>;
     const reason = realtimeRevocationBindingFailure(env);
@@ -43,8 +43,10 @@ describe("account realtime revocation bindings", () => {
     await expect(runRealtimeRevocationsForEnv(env)).resolves.toBeNull();
   });
 
-  it("retains the distinct-database and worker-role guards", () => {
+  it("retains the distinct-database guard and defers proxy role verification to SQL", () => {
     const env = bindings();
+    expect(realtimeRevocationBindingFailure(env)).toBeUndefined();
+    env.EXPORT_WORKER_HYPERDRIVE = { connectionString: "postgres://proxy:private-password@worker-host/db" } as ApiEnv["HYPERDRIVE"];
     expect(realtimeRevocationBindingFailure(env)).toBeUndefined();
     env.EXPORT_WORKER_HYPERDRIVE = env.HYPERDRIVE;
     expect(realtimeRevocationBindingFailure(env)).toBe("database_bindings_identical");
