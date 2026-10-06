@@ -6,6 +6,30 @@ import { createPushOutboxHandler } from "../push-dispatcher";
 const job = { id: "push-job", eventId: "event", recipientId: "peer", conversationId: "conversation", changeSequence: "4", channel: "push" as const, deviceRegistrationId: "device", attempts: 1, leaseToken: "lease", leaseExpiresAt: new Date() };
 
 describe("FCM HTTP v1 adapter", () => {
+  it.each(["oauth", "fcm"] as const)("does not follow %s redirects and keeps their failure retryable", async (stage) => {
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const fetcher = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      expect(init?.redirect).toBe("manual");
+      if (String(url).includes("oauth2") && stage === "fcm") return Response.json({ access_token: "private-token", expires_in: 300 });
+      return new Response(null, { status: 307, headers: { location: "https://untrusted.example/collect" } });
+    });
+    const sender = createFcmHttpV1Sender({ serviceAccount: { clientEmail: "private-email", privateKey: privateKey.export({ type: "pkcs8", format: "pem" }).toString(), projectId: "private-project" }, fetch: fetcher });
+    await expect(sender.send({ token: "private-device", eventId: "private-event", conversationId: "private-conversation" })).resolves.toEqual({ ok: false, retryable: true, category: "transient" });
+    expect(fetcher).toHaveBeenCalledTimes(stage === "oauth" ? 1 : 2);
+    expect(fetcher.mock.calls.every(([url]) => !String(url).includes("untrusted.example"))).toBe(true);
+  });
+
+  it("uses manual mode on both calls in a Worker-compatible successful send", async () => {
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const fetcher = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (init?.redirect === "error") throw new TypeError("Worker rejected redirect mode");
+      expect(init?.redirect).toBe("manual");
+      return String(url).includes("oauth2") ? Response.json({ access_token: "private-token", expires_in: 300 }) : new Response(null, { status: 200 });
+    });
+    const sender = createFcmHttpV1Sender({ serviceAccount: { clientEmail: "private-email", privateKey: privateKey.export({ type: "pkcs8", format: "pem" }).toString(), projectId: "private-project" }, fetch: fetcher });
+    await expect(sender.send({ token: "private-device", eventId: "private-event", conversationId: "private-conversation" })).resolves.toEqual({ ok: true });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
   it("reports safe original transport exceptions and timings in the detailed trace", async () => {
     const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
     const trace = vi.fn();

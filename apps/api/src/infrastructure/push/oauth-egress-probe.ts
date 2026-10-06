@@ -55,7 +55,7 @@ export async function probeOAuthEgress(scope: unknown, fetcher: typeof fetch = g
   requireStaging(scope);
   return requestProof(fetcher, "https://oauth2.googleapis.com/token", {
     method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: "grant_type=diagnostic_invalid", redirect: "error",
+    body: "grant_type=diagnostic_invalid", redirect: "manual",
   });
 }
 
