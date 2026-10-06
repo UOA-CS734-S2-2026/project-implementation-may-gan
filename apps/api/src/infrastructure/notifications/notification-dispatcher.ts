@@ -64,7 +64,9 @@ export function createNotificationDispatcher(input: {
   const now = input.now ?? (() => new Date());
   const random = input.random ?? Math.random;
   const createLeaseToken = input.createLeaseToken ?? (() => crypto.randomUUID());
-  const immediateBudgetMs = input.immediateBudgetMs ?? 1_500;
+  // Post-response work needs time for fresh eligibility checks and cold OAuth.
+  // Keep it bounded below the provider deadline and lease duration.
+  const immediateBudgetMs = input.immediateBudgetMs ?? 10_000;
   const immediateBatchSize = input.immediateBatchSize ?? 10;
   const scheduledBatchSize = input.scheduledBatchSize ?? 100;
   const scheduledBudgetMs = input.scheduledBudgetMs ?? 25_000;
