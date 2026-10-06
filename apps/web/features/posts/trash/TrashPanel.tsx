@@ -17,21 +17,27 @@ class TrashFailure extends Error {
   constructor(readonly failure: PostRestoreFailure) { super(failure); }
 }
 
+type RestoreTarget = { actorId: string; postId: string; generation: number };
+
 export function TrashPanel({ actorId }: { actorId: string }) {
+  return <ActorTrashPanel key={actorId} actorId={actorId} />;
+}
+
+function ActorTrashPanel({ actorId }: { actorId: string }) {
   const client = useQueryClient();
   const router = useRouter();
   const mounted = useRef(true);
   const [deadlineNow, setDeadlineNow] = useState(0);
   const [sessionRevoked, setSessionRevoked] = useState(false);
-  const [restoredIds, setRestoredIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [restoredGenerations, setRestoredGenerations] = useState<ReadonlyMap<string, number>>(() => new Map());
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
-  const expireSession = async () => {
+  const expireSession = async (expectedActorId: string) => {
     if (!mounted.current) return;
     setSessionRevoked(true);
-    client.removeQueries({ queryKey: postKeys.all(actorId) });
+    client.removeQueries({ queryKey: postKeys.all(expectedActorId) });
     await authClient.signOut().catch(() => undefined);
     if (mounted.current) router.replace("/sign-in");
   };
@@ -45,7 +51,7 @@ export function TrashPanel({ actorId }: { actorId: string }) {
   });
   useEffect(() => {
     if (!(query.error instanceof TrashFailure) || query.error.failure !== "unauthenticated") return;
-    void expireSession();
+    void expireSession(actorId);
   // expireSession is bound to this actor-keyed component instance.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query.error]);
@@ -63,36 +69,39 @@ export function TrashPanel({ actorId }: { actorId: string }) {
     return () => { if (timer) clearTimeout(timer); };
   }, [query.data]);
   const restore = useMutation({
-    mutationFn: async (postId: string) => {
-      const result = await postsApi.restore(postId);
+    mutationFn: async (target: RestoreTarget) => {
+      const result = await postsApi.restore(target.postId);
       if (!result.ok) throw new TrashFailure(result.failure);
-      return postId;
     },
-    onSuccess: async (postId) => {
+    onSuccess: async (_value, target) => {
       if (!mounted.current) return;
-      setRestoredIds((current) => new Set([...current, postId]));
+      setRestoredGenerations((current) => {
+        const next = new Map(current);
+        next.set(target.postId, Math.max(next.get(target.postId) ?? -1, target.generation));
+        return next;
+      });
       client.setQueryData<TrashedPostStatus[]>(
-        trashKey(actorId),
-        (current) => current?.filter((post) => post.id !== postId),
+        trashKey(target.actorId),
+        (current) => current?.filter((post) => post.id !== target.postId || post.generation > target.generation),
       );
-      client.removeQueries({ queryKey: postKeys.detail(actorId, postId) });
-      client.removeQueries({ queryKey: postKeys.revisions(actorId, postId) });
-      client.removeQueries({ queryKey: interactionKeys.comments(actorId, postId) });
-      client.removeQueries({ queryKey: interactionKeys.likes(actorId, postId) });
+      client.removeQueries({ queryKey: postKeys.detail(target.actorId, target.postId) });
+      client.removeQueries({ queryKey: postKeys.revisions(target.actorId, target.postId) });
+      client.removeQueries({ queryKey: interactionKeys.comments(target.actorId, target.postId) });
+      client.removeQueries({ queryKey: interactionKeys.likes(target.actorId, target.postId) });
       await Promise.all([
-        client.invalidateQueries({ queryKey: trashKey(actorId) }),
-        client.invalidateQueries({ queryKey: postKeys.all(actorId) }),
-        client.invalidateQueries({ queryKey: feedKeys.list(actorId) }),
-        client.invalidateQueries({ queryKey: profileKeys.all(actorId) }),
+        client.invalidateQueries({ queryKey: trashKey(target.actorId) }),
+        client.invalidateQueries({ queryKey: postKeys.all(target.actorId) }),
+        client.invalidateQueries({ queryKey: feedKeys.list(target.actorId) }),
+        client.invalidateQueries({ queryKey: profileKeys.all(target.actorId) }),
       ]);
     },
-    onError: (error) => {
-      if (error instanceof TrashFailure && error.failure === "unauthenticated") void expireSession();
+    onError: (error, target) => {
+      if (error instanceof TrashFailure && error.failure === "unauthenticated") void expireSession(target.actorId);
     },
   });
 
   if (sessionRevoked) return null;
-  const visiblePosts = query.data?.filter((post) => !restoredIds.has(post.id));
+  const visiblePosts = query.data?.filter((post) => (restoredGenerations.get(post.id) ?? -1) < post.generation);
 
   return (
     <section className="space-y-3 rounded-lg border border-foreground/10 p-4" aria-labelledby="trash-heading">
@@ -106,7 +115,9 @@ export function TrashPanel({ actorId }: { actorId: string }) {
         <ul className="space-y-3">
           {visiblePosts?.map((post) => {
             const restorable = post.restoreUntil.getTime() >= Math.max(deadlineNow, query.dataUpdatedAt) && !post.pendingCleanup;
-            const failed = restore.error instanceof TrashFailure && restore.variables === post.id ? restore.error.failure : undefined;
+            const isCurrentRestore = restore.variables?.actorId === actorId
+              && restore.variables.postId === post.id && restore.variables.generation === post.generation;
+            const failed = restore.error instanceof TrashFailure && isCurrentRestore ? restore.error.failure : undefined;
             const failureMessage = failed === "dayOccupied"
               ? "This day already has a replacement, so the original cannot be restored."
               : failed === "expired" ? "The 7-day restore period has ended."
@@ -117,8 +128,8 @@ export function TrashPanel({ actorId }: { actorId: string }) {
               <p className="font-medium">Dayli from {post.localDate}</p>
               <p className="mt-1 text-xs text-foreground/60">Restore by {post.restoreUntil.toLocaleString()}. Permanent cleanup is due {post.purgeDueAt.toLocaleString()}.</p>
               {failureMessage && <p role="alert" className="mt-2 text-xs text-red-600">{failureMessage}</p>}
-              <Button className="mt-3" disabled={!restorable || (restore.isPending && restore.variables === post.id)} onClick={() => restore.mutate(post.id)} variant={{ weight: "secondary", size: "sm", color: "foreground" }}>
-                {restore.isPending && restore.variables === post.id ? "Restoring..." : restorable ? "Restore" : "Restore period ended"}
+              <Button className="mt-3" disabled={!restorable || (restore.isPending && isCurrentRestore)} onClick={() => restore.mutate({ actorId, postId: post.id, generation: post.generation })} variant={{ weight: "secondary", size: "sm", color: "foreground" }}>
+                {restore.isPending && isCurrentRestore ? "Restoring..." : restorable ? "Restore" : "Restore period ended"}
               </Button>
             </li>;
           })}
