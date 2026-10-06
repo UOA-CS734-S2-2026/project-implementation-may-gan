@@ -43,7 +43,8 @@ SELECT
 SELECT NOT EXISTS (
   SELECT 1
   FROM (VALUES ('data_export_requests'), ('data_export_object_cleanup_tasks'),
-    ('data_export_cleanup_incidents'), ('account_purge_operator_control')) AS tables(table_name)
+    ('data_export_cleanup_incidents'), ('account_purge_operator_control'),
+     ('account_purge_provider_operation_permits')) AS tables(table_name)
   CROSS JOIN (VALUES ('app'), ('lifecycle_worker')) AS roles(role_name)
   WHERE to_regclass(format('public.%I', table_name)) IS NOT NULL
     AND (COALESCE(has_table_privilege(role_name, to_regclass(format('public.%I', table_name)), 'SELECT'), false)
