@@ -27,6 +27,69 @@ const resolved = {
 };
 
 describe("generic notification dispatcher", () => {
+  it("delivers immediately when database checks and cold provider work exceed the former 1.5-second budget", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    try {
+      const delay = (milliseconds: number) => new Promise<void>(resolve => setTimeout(resolve, milliseconds));
+      const storage = store({
+        claimDue: vi.fn().mockImplementationOnce(async () => { await delay(200); return [job]; }).mockResolvedValue([]),
+        renewLease: vi.fn(async claimed => { await delay(90); return { ...job, ...claimed }; }),
+      });
+      let providerSignal: AbortSignal | undefined;
+      const sender = { send: vi.fn(async (_payload: unknown, options?: { signal: AbortSignal }) => {
+        providerSignal = options?.signal;
+        await delay(700);
+        return { ok: true as const };
+      }) };
+      const dispatcher = createNotificationDispatcher({
+        store: storage,
+        resolver: { resolve: vi.fn(async () => { await delay(435); return resolved; }), invalidate: vi.fn() },
+        sender,
+      });
+      let finished = false;
+      const pending = dispatcher.dispatchImmediately().then(result => { finished = true; return result; });
+      await vi.advanceTimersByTimeAsync(1_500);
+      expect(finished).toBe(false);
+      expect(providerSignal?.aborted).toBe(false);
+      expect(storage.reschedule).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(15);
+      await expect(pending).resolves.toMatchObject({ delivered: 1, rescheduled: 0, released: 0 });
+      expect(storage.renewLease).toHaveBeenCalledTimes(2);
+      expect(storage.markDelivered).toHaveBeenCalledWith(expect.objectContaining({ leaseToken: job.leaseToken }), expect.any(Date));
+      expect(storage.reschedule).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it.each(["resolve", "send"] as const)("still bounds hung %s work at the default ten-second immediate deadline", async stage => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    try {
+      const storage = store();
+      let signal: AbortSignal | undefined;
+      const dispatcher = createNotificationDispatcher({
+        store: storage,
+        resolver: {
+          resolve: vi.fn(async (_job, options) => {
+            if (stage === "resolve") { signal = options?.signal; return new Promise<typeof resolved>(() => {}); }
+            return resolved;
+          }),
+          invalidate: vi.fn(),
+        },
+        sender: { send: vi.fn(async (_payload, options) => { signal = options?.signal; return new Promise<{ ok: true }>(() => {}); }) },
+      });
+      let finished = false;
+      const pending = dispatcher.dispatchImmediately().then(result => { finished = true; return result; });
+      await vi.advanceTimersByTimeAsync(9_999);
+      expect(finished).toBe(false); expect(signal?.aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(pending).resolves.toMatchObject(stage === "resolve" ? { released: 1, delivered: 0 } : { rescheduled: 1, delivered: 0 });
+      expect(signal?.aborted).toBe(true);
+      expect(storage.markDelivered).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
   it("reports fixed phase timings and safe resolver failures without affecting retry behavior", async () => {
     const traces = vi.fn();
     const dispatcher = createNotificationDispatcher({
