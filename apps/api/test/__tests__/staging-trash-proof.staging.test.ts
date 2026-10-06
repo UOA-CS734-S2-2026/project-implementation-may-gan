@@ -56,6 +56,19 @@ describe("private staging Trash attestation", () => {
     }
   });
 
+  it("admits cleanup only from the authoritative lifecycle worker session", async () => {
+    const proof = await awaitRpcDeployment(
+      "provePostTrashCleanupAdmission",
+      () => env.STAGING_API.provePostTrashCleanupAdmission(),
+    );
+    expect(proof).toEqual({
+      structuralDependencies: true,
+      connectionStringNamesLifecycleWorker: expect.any(Boolean),
+      authoritativeWorkerRole: true,
+      runtimeAdmitted: true,
+    });
+  });
+
   it("proves aggregate access only through lifecycle_worker", async () => {
     const proof = await awaitRpcDeployment(
       "provePostTrashWorkerFence",

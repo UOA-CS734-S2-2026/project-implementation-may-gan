@@ -1,4 +1,4 @@
-const deploymentMethods = new Set(["proveStagingRevision", "provePostTrashWorkerFence"]);
+const deploymentMethods = new Set(["proveStagingRevision", "provePostTrashWorkerFence", "provePostTrashCleanupAdmission"]);
 
 export interface RpcDeploymentReadinessOptions {
   timeoutMs?: number;
@@ -18,7 +18,7 @@ function isPreviousDeploymentReceiver(error: unknown, method: string): boolean {
  * database, attribution, and application failures remain immediate failures.
  */
 export async function awaitRpcDeployment<T>(
-  method: "proveStagingRevision" | "provePostTrashWorkerFence",
+  method: "proveStagingRevision" | "provePostTrashWorkerFence" | "provePostTrashCleanupAdmission",
   invoke: () => Promise<T>,
   options: RpcDeploymentReadinessOptions = {},
 ): Promise<T> {

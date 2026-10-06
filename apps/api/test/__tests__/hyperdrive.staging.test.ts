@@ -24,6 +24,7 @@ interface HyperdriveIntegrationService {
     cleanup: boolean;
   }>;
   proveStagingRevision: () => Promise<{ revision: string; storageDigest: string }>;
+  provePostTrashCleanupAdmission: () => Promise<import("../../src/infrastructure/jobs/post-trash-runtime").PostTrashCleanupAdmissionProof>;
   provePostTrashWorkerFence: () => Promise<{
     appRoleDenied: boolean;
     lifecycleWorkerRole: boolean;
