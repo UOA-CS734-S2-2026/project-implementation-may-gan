@@ -4,9 +4,9 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { captureExportApproval, captureRelease, validateBrowserProxyMode, validatePushReadiness } from "./capture-staging-release.mjs";
+import { captureExportApproval, captureRelease, validateBrowserProxyMode, validatePostTrashApprovalDigest, validatePushReadiness } from "./capture-staging-release.mjs";
 
-const noExport = { exportApproval: "none", exportCleanupOnly: "none" };
+const noExport = { postTrashApprovalDigest: "", exportApproval: "none", exportCleanupOnly: "none" };
 
 function git(root, args) {
   return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
@@ -104,6 +104,14 @@ test("captured browser proxy and push-readiness modes must be explicit booleans"
   assert.throws(() => validatePushReadiness("enabled"), /must be true or false/);
 });
 
+test("post Trash activation captures only an explicit single marker digest", () => {
+  assert.equal(validatePostTrashApprovalDigest(undefined), "");
+  assert.equal(validatePostTrashApprovalDigest(""), "");
+  assert.equal(validatePostTrashApprovalDigest("a".repeat(64)), "a".repeat(64));
+  assert.throws(() => validatePostTrashApprovalDigest("A".repeat(64)), /approval digest is invalid/);
+  assert.throws(() => validatePostTrashApprovalDigest(`${"a".repeat(64)},${"b".repeat(64)}`), /approval digest is invalid/);
+});
+
 test("captured staging export modes are explicit, validated, and immutable", () => withReleaseRepository(({ root, currentSha }) => {
   assert.equal(captureExportApproval(undefined, "all-staging-accounts"), "none");
   assert.throws(() => captureExportApproval("true", "all-staging-accounts"), /approval value is invalid/);
@@ -111,8 +119,8 @@ test("captured staging export modes are explicit, validated, and immutable", () 
     browserProxyEnabled: "true", pushReadiness: "false", exportAllUsersApproved: "all-staging-accounts",
     exportCleanupOnlyApproved: "continue-existing-cleanup", cwd: root }), {
     commitSha: currentSha, migrationMode: "forward", toolingSha: currentSha,
-    browserProxyEnabled: "true", pushReadiness: "false", exportApproval: "all-staging-accounts",
-    exportCleanupOnly: "continue-existing-cleanup",
+    browserProxyEnabled: "true", pushReadiness: "false", postTrashApprovalDigest: "",
+    exportApproval: "all-staging-accounts", exportCleanupOnly: "continue-existing-cleanup",
   });
 }));
 
