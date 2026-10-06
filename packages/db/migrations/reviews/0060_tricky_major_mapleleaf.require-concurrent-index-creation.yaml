@@ -1,0 +1,6 @@
+reason: The index is created transactionally on account_purge_provider_operation_permits immediately after that new empty table is created. CREATE INDEX CONCURRENTLY is invalid inside the Drizzle migration transaction, while ordinary index creation cannot block existing writers because the table did not exist before this migration.
+affected_data_and_clients: The indexed table is new, empty, private, and has no runtime role grants. Existing account and lifecycle rows are not scanned or locked by this index build.
+rollout_sequence: Apply migration 0060 through the protected transactional migration workflow, verify the index and report-only role posture, and keep purge execution disabled pending separate staging proof.
+backup_checkpoint: Confirm the required PostgreSQL restore checkpoint before protected-environment execution. No provider operation or account purge is authorized by this migration.
+forward_fix_plan: Stop on migration failure, inspect the new private table and migration transaction, and add a reviewed forward migration rather than editing an applied migration.
+reviewer: Required database CODEOWNER review and privacy-owner approval before protected migration execution.

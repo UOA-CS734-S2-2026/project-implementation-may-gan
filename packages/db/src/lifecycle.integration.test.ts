@@ -569,21 +569,46 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     expect(firstJob).toBeTruthy();
     const firstPermit = `interleave-permit-${crypto.randomUUID()}`;
     const secondWorker = postgres(migratorConnection, { max: 1, prepare: false, onnotice: () => undefined });
+    const observer = postgres(migratorConnection, { max: 1, prepare: false, onnotice: () => undefined });
+    const waitForControlLock = async (blockerPid: number, functionName: string): Promise<void> => {
+      const deadline = Date.now() + 2_000;
+      while (Date.now() < deadline) {
+        const [activity] = await observer<{ pid: number; wait_event_type: string | null; blockers: number[] }[]>`
+          select pid, wait_event_type, pg_blocking_pids(pid) as blockers
+          from pg_stat_activity
+          where state = 'active' and query like ${`%${functionName}%`}
+          order by backend_start desc limit 1
+        `;
+        if (activity?.wait_event_type === "Lock" && activity.blockers.includes(blockerPid)) return;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      throw new Error(`${functionName} did not wait on control lock held by ${blockerPid}.`);
+    };
+    const settleWithin = async <T>(promise: Promise<T>, label: string): Promise<T> => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        return await Promise.race([promise, new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`${label} did not settle after lock release.`)), 2_000);
+        })]);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    };
     let pausePromise: Promise<unknown> | undefined;
-    let pauseSettled = false;
+    let startPromise: Promise<unknown> | undefined;
     try {
       await migrator.begin(async (transaction) => {
+        const [{ pid: holderPid }] = await transaction<{ pid: number }[]>`select pg_backend_pid() as pid`;
         expect(await transaction`select * from public.start_account_purge_provider_operation(
           ${firstPermit}, ${firstJob.task_id}, 5, ${firstLease}, 'delete_object',
           clock_timestamp() + interval '30 seconds')`).toHaveLength(1);
         const [{ generation: epoch }] = await transaction`select generation from public.account_purge_operator_control`;
-        pausePromise = secondWorker`select public.begin_account_purge_provider_pause(
-          ${epoch}, 'admission first', 'integration operator') as state`
-          .then((rows) => { pauseSettled = true; return rows; });
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        expect(pauseSettled).toBe(false);
+        pausePromise = Promise.resolve(secondWorker`select public.begin_account_purge_provider_pause(
+          ${epoch}, 'admission first', 'integration operator') as state`);
+        await waitForControlLock(holderPid, "begin_account_purge_provider_pause");
       });
-      await expect(pausePromise).resolves.toEqual([{ state: "draining" }]);
+      await expect(settleWithin(pausePromise!, "blocked pause")).resolves.toEqual([{ state: "draining" }]);
+      pausePromise = undefined;
       expect(await migrator`select public.finish_account_purge_provider_operation(
         ${firstPermit}, ${firstJob.task_id}, 5, ${firstLease}, true) as accepted`).toEqual([{ accepted: true }]);
       expect(await migrator`select public.refresh_account_purge_provider_drain() as state`).toEqual([{ state: "paused" }]);
@@ -596,23 +621,25 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
       const secondClaims = await migrator`select * from public.claim_account_purge_cleanup(10, ${secondLease}, 90)`;
       const secondJob = secondClaims.find((job) => job.owner_id === owner)!;
       expect(secondJob).toBeTruthy();
-      let startPromise: Promise<unknown> | undefined;
-      let startSettled = false;
       await migrator.begin(async (transaction) => {
+        const [{ pid: holderPid }] = await transaction<{ pid: number }[]>`select pg_backend_pid() as pid`;
         const [{ generation: epoch }] = await transaction`select generation from public.account_purge_operator_control`;
         expect(await transaction`select public.begin_account_purge_provider_pause(
           ${epoch}, 'pause first', 'integration operator') as state`).toEqual([{ state: "draining" }]);
-        startPromise = secondWorker`select * from public.start_account_purge_provider_operation(
+        startPromise = Promise.resolve(secondWorker`select * from public.start_account_purge_provider_operation(
           ${`blocked-${crypto.randomUUID()}`}, ${secondJob.task_id}, 5, ${secondLease}, 'delete_object',
-          clock_timestamp() + interval '30 seconds')`.then((rows) => { startSettled = true; return rows; });
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        expect(startSettled).toBe(false);
+          clock_timestamp() + interval '30 seconds')`);
+        await waitForControlLock(holderPid, "start_account_purge_provider_operation");
       });
-      await expect(startPromise).resolves.toEqual([]);
+      await expect(settleWithin(startPromise!, "blocked admission")).resolves.toEqual([]);
+      startPromise = undefined;
       expect(await migrator`select public.refresh_account_purge_provider_drain() as state`).toEqual([{ state: "paused" }]);
       await migrator`update public.account_purge_object_cleanup_tasks
         set next_attempt_at = 'infinity'::timestamptz where id = ${secondJob.task_id}`;
     } finally {
+      if (pausePromise) await settleWithin(pausePromise.catch(() => undefined), "pause cleanup").catch(() => undefined);
+      if (startPromise) await settleWithin(startPromise.catch(() => undefined), "admission cleanup").catch(() => undefined);
+      await observer.end({ timeout: 5 });
       await secondWorker.end({ timeout: 5 });
     }
   });

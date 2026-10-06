@@ -1,4 +1,5 @@
 -- squawk-ignore-file prefer-robust-stmts
+-- squawk-ignore-file require-concurrent-index-creation
 SET lock_timeout = '5s';--> statement-breakpoint
 SET statement_timeout = '5min';--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "account_purge_provider_operation_permits" (
@@ -42,7 +43,7 @@ CREATE TABLE IF NOT EXISTS "account_purge_provider_operation_permits" (
 );
 --> statement-breakpoint
 ALTER TABLE "account_purge_operator_control" ADD COLUMN IF NOT EXISTS "drain_state" text DEFAULT 'paused' NOT NULL;--> statement-breakpoint
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "account_purge_provider_permits_open_idx" ON "account_purge_provider_operation_permits" USING btree ("status","operation_deadline");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "account_purge_provider_permits_open_idx" ON "account_purge_provider_operation_permits" USING btree ("status","operation_deadline");--> statement-breakpoint
 ALTER TABLE "account_purge_operator_control" ADD CONSTRAINT "account_purge_operator_control_drain_state_check" CHECK ("account_purge_operator_control"."drain_state" in ('active', 'draining', 'paused', 'incident')) NOT VALID;--> statement-breakpoint
 ALTER TABLE "account_purge_operator_control" VALIDATE CONSTRAINT "account_purge_operator_control_drain_state_check";--> statement-breakpoint
 
