@@ -1,7 +1,10 @@
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { seedPastDeadline } from "../scripts/staging-trash-lifecycle-proof";
+// @ts-expect-error The staging preflight is a directly executed ESM script.
+import { inspectEligiblePostTrash } from "../../../scripts/verify-staging-post-trash-activation.mjs";
 import { repoPath } from "./migrations/paths";
 
 const migratorUrl = process.env.TEST_LIFECYCLE_DATABASE_URL;
@@ -32,6 +35,8 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
   const exportCleanupTasks: string[] = [];
   const proofPosts: string[] = [];
   const proofReservations: string[] = [];
+  let activationMarkerDigest = "";
+  let activationPostId = "";
 
   async function createUser(label: string): Promise<string> {
     const id = `lifecycle-${label}-${crypto.randomUUID()}`;
@@ -333,9 +338,11 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
 
   it("seeds only an exact freshly trashed synthetic proof fixture past its cleanup deadline", async () => {
     const marker = `staging-trash-proof-${crypto.randomUUID().replaceAll("-", "")}`;
+    activationMarkerDigest = createHash("sha256").update(marker).digest("hex");
     const ownerId = `trash-proof-owner-${crypto.randomUUID()}`;
     const sessionId = `trash-proof-session-${crypto.randomUUID()}`;
     const postId = `trash-proof-post-${crypto.randomUUID()}`;
+    activationPostId = postId;
     const reservationId = `trash-proof-reservation-${crypto.randomUUID()}`;
     const mediaId = `trash-proof-media-${crypto.randomUUID()}`;
     users.push(ownerId);
@@ -382,6 +389,35 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
       trash_lease_token is null as lease_clear, trash_failure_category is null as failure_clear
       from public.posts where id = ${postId}`;
     expect(seeded).toEqual({ past_deadline: true, restore_exact: true, purge_exact: true, lease_clear: true, failure_clear: true });
+  });
+
+  it("admits only the approved eligible synthetic fixture without changing cleanup state", async () => {
+    const [before] = await migrator`select updated_at, trash_lease_token, trash_lease_expires_at
+      from public.posts where id = ${activationPostId}`;
+    await expect(inspectEligiblePostTrash(migrator, activationMarkerDigest))
+      .resolves.toEqual({ eligible: 1, approved: 1, unknown: 0 });
+    await expect(inspectEligiblePostTrash(migrator, ""))
+      .resolves.toEqual({ eligible: 1, approved: 0, unknown: 1 });
+    const [after] = await migrator`select updated_at, trash_lease_token, trash_lease_expires_at
+      from public.posts where id = ${activationPostId}`;
+    expect(after).toEqual(before);
+
+    const ordinaryOwner = await createUser("eligible-ordinary");
+    const ordinaryPost = `eligible-ordinary-${crypto.randomUUID()}`;
+    proofPosts.push(ordinaryPost);
+    await migrator`with deadline as (select clock_timestamp() - interval '337 hours' as trashed_at)
+      insert into public.posts
+        (id, author_id, local_date, prompt_id, reflective_answer, rating, audience, accepted_at, released_at,
+          trashed_at, restore_until, trash_purge_due_at, trash_generation)
+      select ${ordinaryPost}, ${ordinaryOwner}, current_date, 'prompt-01-01', 'Ordinary eligible content', 5, 'solo',
+        clock_timestamp() - interval '2 seconds', clock_timestamp() - interval '1 second', deadline.trashed_at,
+        deadline.trashed_at + interval '168 hours', deadline.trashed_at + interval '336 hours', 1 from deadline`;
+    await expect(inspectEligiblePostTrash(migrator, activationMarkerDigest))
+      .resolves.toEqual({ eligible: 2, approved: 1, unknown: 1 });
+    await migrator`update public.posts set trash_failure_category = 'shared_media',
+      trash_next_attempt_at = 'infinity'::timestamptz where id = ${ordinaryPost}`;
+    await expect(inspectEligiblePostTrash(migrator, activationMarkerDigest))
+      .resolves.toEqual({ eligible: 1, approved: 1, unknown: 0 });
   });
 
   it("stages two synthetic owners through leased R2 cleanup, retry, and physical completion", async () => {

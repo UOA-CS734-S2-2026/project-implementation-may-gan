@@ -58,6 +58,12 @@ export function validatePushReadiness(value) {
   return value;
 }
 
+export function validatePostTrashApprovalDigest(value) {
+  if (value === undefined || value === "") return "";
+  if (!/^[a-f0-9]{64}$/.test(value)) fail("the post Trash approval digest is invalid.");
+  return value;
+}
+
 export function captureExportApproval(value, expected) {
   if (value === undefined || value === "") return "none";
   if (value !== expected) fail("Staging export approval value is invalid.");
@@ -70,7 +76,7 @@ function git(args, { cwd, stdio = "pipe" } = {}) {
 }
 
 export function captureRelease({ eventSha, inputSha, dispatchSha, toolingSha, browserProxyEnabled, pushReadiness,
-  exportAllUsersApproved, exportCleanupOnlyApproved, cwd = process.cwd() }) {
+  postTrashApprovalDigest, exportAllUsersApproved, exportCleanupOnlyApproved, cwd = process.cwd() }) {
   const mainSha = git(["rev-parse", "origin/main"], { cwd });
   const hasCommit = (sha) => {
     try {
@@ -97,13 +103,15 @@ export function captureRelease({ eventSha, inputSha, dispatchSha, toolingSha, br
     toolingSha,
     browserProxyEnabled: validateBrowserProxyMode(browserProxyEnabled),
     pushReadiness: validatePushReadiness(pushReadiness),
+    postTrashApprovalDigest: validatePostTrashApprovalDigest(postTrashApprovalDigest),
     exportApproval: captureExportApproval(exportAllUsersApproved, "all-staging-accounts"),
     exportCleanupOnly: captureExportApproval(exportCleanupOnlyApproved, "continue-existing-cleanup"),
   };
 }
 
-function writeOutputs({ commitSha, migrationMode, toolingSha, browserProxyEnabled, pushReadiness, exportApproval, exportCleanupOnly }, outputPath) {
-  const output = `commit_sha=${commitSha}\nmigration_mode=${migrationMode}\ntooling_sha=${toolingSha}\nbrowser_proxy_enabled=${browserProxyEnabled}\npush_readiness=${pushReadiness}\nexport_approval=${exportApproval}\nexport_cleanup_only=${exportCleanupOnly}\n`;
+function writeOutputs({ commitSha, migrationMode, toolingSha, browserProxyEnabled, pushReadiness,
+  postTrashApprovalDigest, exportApproval, exportCleanupOnly }, outputPath) {
+  const output = `commit_sha=${commitSha}\nmigration_mode=${migrationMode}\ntooling_sha=${toolingSha}\nbrowser_proxy_enabled=${browserProxyEnabled}\npush_readiness=${pushReadiness}\npost_trash_approval_digest=${postTrashApprovalDigest}\nexport_approval=${exportApproval}\nexport_cleanup_only=${exportCleanupOnly}\n`;
   if (outputPath) {
     appendFileSync(outputPath, output);
   } else {
@@ -119,6 +127,7 @@ function main() {
     toolingSha: process.env.TOOLING_SHA,
     browserProxyEnabled: process.env.STAGING_BROWSER_PROXY_ENABLED,
     pushReadiness: process.env.PUSH_READINESS,
+    postTrashApprovalDigest: process.env.STAGING_POST_TRASH_APPROVED_MARKER_DIGEST,
     exportAllUsersApproved: process.env.STAGING_EXPORT_ALL_USERS_APPROVED,
     exportCleanupOnlyApproved: process.env.STAGING_EXPORT_CLEANUP_ONLY_APPROVED,
   });

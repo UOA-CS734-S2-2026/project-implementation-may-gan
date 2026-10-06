@@ -18,6 +18,11 @@ on:
         required: false
         default: false
         type: boolean
+      post_trash_approved_marker_digest:
+        description: One explicitly approved synthetic Trash marker digest, empty allows no eligible posts
+        required: false
+        default: ""
+        type: string
 
 permissions:
   actions: write
@@ -43,6 +48,7 @@ jobs:
       browser_proxy_enabled: ${{ steps.release.outputs.browser_proxy_enabled }}
       tooling_sha: ${{ steps.release.outputs.tooling_sha }}
       push_readiness: ${{ steps.release.outputs.push_readiness }}
+      post_trash_approval_digest: ${{ steps.release.outputs.post_trash_approval_digest }}
       export_approval: ${{ steps.release.outputs.export_approval }}
       export_cleanup_only: ${{ steps.release.outputs.export_cleanup_only }}
     steps:
@@ -58,6 +64,7 @@ jobs:
           TOOLING_SHA: ${{ github.workflow_sha }}
           STAGING_BROWSER_PROXY_ENABLED: ${{ vars.STAGING_BROWSER_PROXY_ENABLED || 'false' }}
           PUSH_READINESS: ${{ github.event_name == 'workflow_dispatch' && inputs.push_readiness || 'false' }}
+          STAGING_POST_TRASH_APPROVED_MARKER_DIGEST: ${{ github.event_name == 'workflow_dispatch' && inputs.post_trash_approved_marker_digest || '' }}
           STAGING_EXPORT_ALL_USERS_APPROVED: ${{ vars.STAGING_EXPORT_ALL_USERS_APPROVED }}
           STAGING_EXPORT_CLEANUP_ONLY_APPROVED: ${{ vars.STAGING_EXPORT_CLEANUP_ONLY_APPROVED }}
         run: node scripts/capture-staging-release.mjs
@@ -85,6 +92,7 @@ jobs:
       browser_proxy_enabled: ${{ needs.capture.outputs.browser_proxy_enabled }}
       tooling_sha: ${{ needs.capture.outputs.tooling_sha }}
       push_readiness: ${{ needs.capture.outputs.push_readiness }}
+      post_trash_approval_digest: ${{ needs.capture.outputs.post_trash_approval_digest }}
       export_approval: ${{ needs.capture.outputs.export_approval }}
       export_cleanup_only: ${{ needs.capture.outputs.export_cleanup_only }}
     secrets: inherit

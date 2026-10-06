@@ -20,6 +20,9 @@ on:
       push_readiness:
         required: true
         type: string
+      post_trash_approval_digest:
+        required: true
+        type: string
       export_approval:
         required: true
         type: string
@@ -47,6 +50,7 @@ jobs:
           CAPTURED_MIGRATION_MODE: ${{ inputs.migration_mode }}
           CAPTURED_BROWSER_PROXY_ENABLED: ${{ inputs.browser_proxy_enabled }}
           CAPTURED_PUSH_READINESS: ${{ inputs.push_readiness }}
+          CAPTURED_POST_TRASH_APPROVAL_DIGEST: ${{ inputs.post_trash_approval_digest }}
           CAPTURED_EXPORT_APPROVAL: ${{ inputs.export_approval }}
           CAPTURED_EXPORT_CLEANUP_ONLY: ${{ inputs.export_cleanup_only }}
           STAGING_BROWSER_PROXY_ENABLED: ${{ vars.STAGING_BROWSER_PROXY_ENABLED || 'false' }}
@@ -65,6 +69,10 @@ jobs:
           fi
           if [[ "$CAPTURED_PUSH_READINESS" != "true" && "$CAPTURED_PUSH_READINESS" != "false" ]]; then
             echo 'Captured push readiness mode must be true or false.' >&2
+            exit 1
+          fi
+          if [[ -n "$CAPTURED_POST_TRASH_APPROVAL_DIGEST" && ! "$CAPTURED_POST_TRASH_APPROVAL_DIGEST" =~ ^[a-f0-9]{64}$ ]]; then
+            echo 'Captured post Trash approval digest is invalid.' >&2
             exit 1
           fi
           if [[ ( "$CAPTURED_EXPORT_APPROVAL" != 'none' && "$CAPTURED_EXPORT_APPROVAL" != 'all-staging-accounts' ) ||
@@ -96,6 +104,12 @@ jobs:
           CLOUDFLARE_STAGING_HYPERDRIVE_ID: ${{ secrets.CLOUDFLARE_STAGING_HYPERDRIVE_ID }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: node deployment-tooling/scripts/verify-staging-schema-target.mjs
+      - name: Block unknown eligible post Trash cleanup before any mutation
+        env:
+          MIGRATION_TARGET: staging
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          STAGING_POST_TRASH_APPROVED_MARKER_DIGEST: ${{ inputs.post_trash_approval_digest }}
+        run: node deployment-tooling/scripts/verify-staging-post-trash-activation.mjs
       - name: Check captured release migrations before mutation
         if: inputs.migration_mode == 'forward'
         env:
@@ -173,6 +187,12 @@ jobs:
         run: |
           pnpm --dir apps/api exec wrangler deploy --dry-run --config wrangler.staging.jsonc
           pnpm --dir apps/api exec wrangler deploy --dry-run --config wrangler.hyperdrive-test.jsonc
+      - name: Recheck post Trash eligibility before staging writes
+        env:
+          MIGRATION_TARGET: staging
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          STAGING_POST_TRASH_APPROVED_MARKER_DIGEST: ${{ inputs.post_trash_approval_digest }}
+        run: node deployment-tooling/scripts/verify-staging-post-trash-activation.mjs
       - name: Run OAuth-only push readiness
         if: inputs.push_readiness == 'true'
         env:
