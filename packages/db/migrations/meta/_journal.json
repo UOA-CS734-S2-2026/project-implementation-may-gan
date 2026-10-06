@@ -421,6 +421,13 @@
       "when": 1791200336686,
       "tag": "0059_account_purge_operator_controls",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1791279497654,
+      "tag": "0060_tricky_major_mapleleaf",
+      "breakpoints": true
     }
   ]
 }

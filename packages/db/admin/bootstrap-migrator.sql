@@ -34,6 +34,7 @@ BEGIN
     'account_management_grants',
     'account_purge_object_cleanup_tasks',
     'account_purge_operator_control',
+    'account_purge_provider_operation_permits',
     'account_notification_preferences',
     'account_purge_receipts',
     'account_realtime_revocations',

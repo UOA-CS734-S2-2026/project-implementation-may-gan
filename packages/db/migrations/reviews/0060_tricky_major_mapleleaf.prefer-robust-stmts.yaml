@@ -1,0 +1,6 @@
+reason: The drain-state constraint must be installed and validated as one protected forward migration. PostgreSQL does not support ADD CONSTRAINT IF NOT EXISTS, and silently accepting an existing differently defined constraint would weaken the pause protocol.
+affected_data_and_clients: Adds a validated state check to the singleton private operator-control row. Runtime roles cannot read or mutate the row, and no purge executor receives access.
+rollout_sequence: Apply through the protected manual migration workflow, verify the report-only state and synthetic race suite, then keep account purge execution disabled pending separate staging proof.
+backup_checkpoint: Confirm the required PostgreSQL restore checkpoint before protected-environment execution. No provider operation or user purge is part of this rollout.
+forward_fix_plan: Stop on any migration failure, inspect the private control schema, and add a reviewed forward migration rather than editing an applied migration.
+reviewer: Required database CODEOWNER review and privacy-owner approval before protected migration execution.
