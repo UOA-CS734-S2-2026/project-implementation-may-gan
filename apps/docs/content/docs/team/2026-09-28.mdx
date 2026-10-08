@@ -1,0 +1,193 @@
+---
+title: Week of 2026-09-28
+description: Connected features, staging, documentation, and release checks
+---
+
+Period: 28 September to 4 October 2026 (Pacific/Auckland).
+
+We connected Dayli across our API, web app, and Flutter app. We also developed our deployment process, privacy controls, and documentation site.
+
+## Posting and reflection
+
+Our posting and reflection work (Jos) included:
+
+- Flutter submission ([PR #135](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/135)), the friends feed ([PR #151](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/151)), and post detail ([PR #152](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/152)).
+- Profiles, archives, editing, streaks, and photos ([PR #178](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/178), [PR #181](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/181), [PR #182](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/182), [PR #183](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/183)). We changed our feed to show yesterday's posts in [PR #184](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/184).
+- Post editing and revision history ([PR #234](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/234), [PR #235](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/235)), likes and comments ([PR #236](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/236), [PR #237](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/237)), and counts on cards and profiles ([PR #240](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/240)).
+- Mobile streak state ([PR #247](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/247)), mood history ([PR #248](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/248)), On This Day ([PR #253](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/253)), future-self notes ([PR #254](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/254)), and native composer entry points ([PR #256](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/256)).
+
+## Accounts, messaging, and operations
+
+We connected friend discovery and requests (Anton) ([PR #137](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/137)), realtime messaging ([PR #139](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/139)), username requirements ([PR #147](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/147)), and social UI updates ([PR #149](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/149)). We then fixed message delivery and unread state ([PR #186](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/186)), and added direct-message previews ([PR #296](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/296)) and mobile consent, friend-request notifications, and daily notifications ([PR #300](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/300)).
+
+We added rate limiting to our backend ([PR #173](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/173)), an opt-in web auth proxy ([PR #197](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/197)), account policy enforcement ([PR #239](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/239)), explicit legal acceptance before account creation ([PR #242](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/242)), anonymous public-post reads ([PR #266](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/266)), and reviewed staging-only exports ([PR #289](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/289)). We added staging deployment and migration safeguards in [PR #177](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/177), [PR #208](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/208), [PR #211](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/211), and [PR #214](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/214).
+
+## Media and mobile experience
+
+Our media work (JooHui) included:
+
+- Upload validation ([PR #116](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/116)), Flutter uploads ([PR #170](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/170)), and post media delivery ([PR #190](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/190), [PR #193](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/193), [PR #198](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/198)).
+- Abandoned reservation cleanup ([PR #200](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/200)), audio storage ([PR #238](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/238)), camera capture ([PR #257](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/257)), and in-app audio capture ([PR #279](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/279)).
+- App branding ([PR #283](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/283)) and weather context ([PR #294](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/294)).
+
+We added biometric app protection (Andrew) in [PR #287](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/287) and a global design review pass in [PR #297](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/297).
+
+## Documentation
+
+We introduced and deployed our docs application (Anton) ([PR #207](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/207), [PR #215](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/215)), then published and refreshed the guides ([PR #278](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/278), [PR #285](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/285)). We documented reflection features (Jos) ([PR #299](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/299)) and mobile staging setup ([PR #307](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/307), [PR #308](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/308)). We updated our weather documentation (JooHui) ([PR #306](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/306)), and documented biometrics (Andrew) ([PR #309](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/309)).
+
+## Our remaining work at the end of the week
+
+- Physical-device notification checks and deployed messaging recovery: [#130](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/130) and [#131](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/131). We still needed to complete Firebase/APNs readiness in [#141](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/141).
+- Messaging attachments: [#133](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/133). Quiet-hours policy: [#265](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/265).
+- We still had privacy and legal lifecycle work open across [#157](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/157), [#161](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/161), [#164](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/164), [#165](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/165), and [#169](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/169). We had merged some implementation PRs, with further work tracked in these issues.
+- We still had post deletion and media purge work open in [#77](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/77), assigned to Jos. We also had a Trash restoration bug open in [#301](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/301); activation and legal-publication PRs ([PR #303](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/303), [PR #304](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/304)) were still open.
+
+## Source record
+
+<details>
+<summary>Merged pull requests for this week</summary>
+
+| PR | Author | Merged (Auckland) | Change |
+| --- | --- | --- | --- |
+| [PR #123](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/123) | AntGa | 2026-09-28 | Style auth emails to match Dayli |
+| [PR #124](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/124) | AntGa | 2026-09-28 | Add password-confirmed Google account linking |
+| [PR #126](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/126) | AntGa | 2026-09-28 | Fix web typecheck by aligning Zod versions |
+| [PR #116](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/116) | joohuil | 2026-09-28 | Feat/23 validate media uploads |
+| [PR #140](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/140) | AntGa | 2026-09-29 | Enable automatic PR verification for backend web Flutter and Postgres |
+| [PR #134](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/134) | AntGa | 2026-09-29 | Refactor backend into action slices with typed auth and test foundations |
+| [PR #137](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/137) | AntGa | 2026-09-29 | Add friends discovery and request management on web and Flutter |
+| [PR #139](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/139) | AntGa | 2026-09-29 | Add realtime direct messaging on web and Flutter |
+| [PR #143](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/143) | AntGa | 2026-09-29 | Reject migration drift before staging SQL is applied |
+| [PR #144](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/144) | AntGa | 2026-09-29 | Verify staging Worker secret names after Cloudflare bulk success |
+| [PR #125](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/125) | AntGa | 2026-09-29 | Explain how to link Google after a password-account collision |
+| [PR #147](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/147) | AntGa | 2026-09-29 | Require chosen usernames before friends and messaging |
+| [PR #146](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/146) | joohuil | 2026-09-29 | chore: r2 bindings to staging |
+| [PR #135](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/135) | jebadenas | 2026-09-29 | feat: submit daily posts from the Flutter composer with a chosen audience (#18) |
+| [PR #150](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/150) | AntGa | 2026-09-30 | refactor(api): enforce action-owned backend routes and imports |
+| [PR #151](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/151) | jebadenas | 2026-09-30 | Add the friends feed across API, web and Flutter |
+| [PR #152](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/152) | jebadenas | 2026-09-30 | Add post detail across API, web and Flutter |
+| [PR #149](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/149) | AntGa | 2026-09-30 | Rebuild WDCC-style social search friends and messages |
+| [PR #154](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/154) | joohuil | 2026-09-30 | docs: docs updated after r2 verification run |
+| [PR #153](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/153) | AntGa | 2026-09-30 | test(web): add desktop and mobile browser account journeys |
+| [PR #171](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/171) | AntGa | 2026-09-30 | refactor(api): use Drizzle builders for runtime data access |
+| [PR #173](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/173) | AntGa | 2026-09-30 | feat(api): add Cloudflare request rate limiting |
+| [PR #177](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/177) | AntGa | 2026-09-30 | ci: deploy successful main commits to staging |
+| [PR #170](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/170) | joohuil | 2026-09-30 | feat (22): flutter media upload |
+| [PR #186](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/186) | AntGa | 2026-09-30 | fix: repair web messaging delivery and unread state |
+| [PR #176](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/176) | AntGa | 2026-10-01 | refactor(api): simplify Drizzle SQL expressions |
+| [PR #190](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/190) | joohuil | 2026-10-01 | feat: link post media |
+| [PR #193](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/193) | joohuil | 2026-10-01 | feat(api): sign short-lived download URLs for post media |
+| [PR #194](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/194) | AntGa | 2026-10-01 | feat(web): polish messaging reactions and actions |
+| [PR #198](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/198) | joohuil | 2026-10-01 | feat: media downloads display |
+| [PR #184](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/184) | jebadenas | 2026-10-01 | feat: show only yesterday's daylies in the feed |
+| [PR #197](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/197) | AntGa | 2026-10-01 | feat: add opt-in server auth proxy and route guards |
+| [PR #199](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/199) | AntGa | 2026-10-01 | feat: hold hosted mutations by default |
+| [PR #178](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/178) | jebadenas | 2026-10-01 | feat: profile archive on API, web and Flutter |
+| [PR #181](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/181) | jebadenas | 2026-10-01 | feat: profile details, editing and username changes |
+| [PR #182](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/182) | jebadenas | 2026-10-01 | feat: posting streaks on profiles |
+| [PR #183](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/183) | jebadenas | 2026-10-01 | feat: profile photos |
+| [PR #185](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/185) | jebadenas | 2026-10-01 | feat: profile about cards and original friend buttons |
+| [PR #202](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/202) | AntGa | 2026-10-01 | fix: reconstruct proxy requests across runtime boundaries |
+| [PR #200](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/200) | joohuil | 2026-10-01 | feat: clean up abandoned media reservations |
+| [PR #206](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/206) | AntGa | 2026-10-01 | chore: remove hosted mutation hold |
+| [PR #208](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/208) | AntGa | 2026-10-01 | fix: reject stale automatic staging releases |
+| [PR #203](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/203) | AntGa | 2026-10-01 | feat: add draft legal readers |
+| [PR #204](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/204) | AntGa | 2026-10-01 | feat: add privacy legal foundation |
+| [PR #209](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/209) | AntGa | 2026-10-01 | Fix concise legal links on auth entry points |
+| [PR #211](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/211) | AntGa | 2026-10-01 | feat: verify staging database before deployment and preserve web logs |
+| [PR #212](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/212) | AntGa | 2026-10-01 | fix: configure hosted migration base ref |
+| [PR #213](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/213) | AntGa | 2026-10-01 | test: verify browser proxy entrypoint isolation in workerd |
+| [PR #214](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/214) | AntGa | 2026-10-01 | feat: apply pending migrations in forward staging releases |
+| [PR #217](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/217) | AntGa | 2026-10-01 | fix: reject unsafe cross-origin mutations and limiter outages |
+| [PR #210](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/210) | AntGa | 2026-10-01 | feat: add messaging participant identity foundation |
+| [PR #218](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/218) | AntGa | 2026-10-01 | feat: add messaging participant compatibility migration |
+| [PR #219](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/219) | AntGa | 2026-10-01 | fix: reject Worker-originated requests before trusting source IPs |
+| [PR #207](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/207) | AntGa | 2026-10-01 | chore: init docs app  |
+| [PR #215](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/215) | AntGa | 2026-10-01 | chore: setup doc app deployment script |
+| [PR #220](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/220) | AntGa | 2026-10-01 | feat: read messaging through stable participants |
+| [PR #221](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/221) | AntGa | 2026-10-01 | docs: define fail-closed data export architecture |
+| [PR #223](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/223) | AntGa | 2026-10-02 | feat: fence messaging mutations and delivery by participant lifecycle |
+| [PR #224](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/224) | AntGa | 2026-10-02 | feat: prepare durable messaging participant keys |
+| [PR #225](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/225) | AntGa | 2026-10-02 | fix: load PostgreSQL client in staging migration preflight |
+| [PR #226](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/226) | AntGa | 2026-10-02 | feat: read messaging identities through participants |
+| [PR #222](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/222) | AntGa | 2026-10-02 | test: add staging authentication smoke checks |
+| [PR #227](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/227) | AntGa | 2026-10-02 | fix: install Chromium for staging auth smoke |
+| [PR #228](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/228) | AntGa | 2026-10-02 | feat: write and deliver messaging through participant keys |
+| [PR #229](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/229) | AntGa | 2026-10-02 | fix: handle staging smoke analytics and streamed redirects |
+| [PR #230](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/230) | AntGa | 2026-10-02 | feat: prepare messaging runtime for detached peers |
+| [PR #231](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/231) | AntGa | 2026-10-02 | feat: detach messaging user foreign keys without enabling purge |
+| [PR #232](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/232) | AntGa | 2026-10-02 | chore: make docs only deploy on doc file changes |
+| [PR #239](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/239) | AntGa | 2026-10-02 | feat: enforce account policy across API and delivery |
+| [PR #241](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/241) | AntGa | 2026-10-02 | feat: add inactive Google proof intent storage |
+| [PR #242](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/242) | AntGa | 2026-10-02 | feat: require explicit legal action before account creation |
+| [PR #243](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/243) | AntGa | 2026-10-03 | feat: add session-bound password reauthentication grants |
+| [PR #245](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/245) | AntGa | 2026-10-03 | feat: add fresh Google management proof grants |
+| [PR #244](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/244) | AntGa | 2026-10-03 | docs: record privacy handoff decisions and release gates |
+| [PR #246](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/246) | AntGa | 2026-10-03 | feat: add inactive account deletion command transactions |
+| [PR #249](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/249) | AntGa | 2026-10-03 | feat: add gated deletion routes and pending visibility |
+| [PR #250](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/250) | AntGa | 2026-10-03 | Post Trash with restorable deadlines and fenced cleanup (#163) |
+| [PR #238](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/238) | joohuil | 2026-10-03 | feat: validate and store audio attachments |
+| [PR #251](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/251) | AntGa | 2026-10-03 | Classify baseline data export inventory (#162 prerequisite) |
+| [PR #233](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/233) | jebadenas | 2026-10-03 | fix: declare OpenAPI 3.0.3 so generated clients keep nullability |
+| [PR #266](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/266) | AntGa | 2026-10-04 | feat: allow anonymous reads of public posts |
+| [PR #252](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/252) | AntGa | 2026-10-04 | feat: build scoped data export service core |
+| [PR #268](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/268) | AntGa | 2026-10-04 | feat: add public profile read projections |
+| [PR #270](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/270) | AntGa | 2026-10-04 | feat: authorize public profile media delivery |
+| [PR #234](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/234) | jebadenas | 2026-10-04 | feat: edit posts with revision history |
+| [PR #235](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/235) | jebadenas | 2026-10-04 | feat: edit and delete posts on web and Flutter |
+| [PR #257](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/257) | joohuil | 2026-10-04 | feat(mobile): take photos and video with camera |
+| [PR #274](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/274) | AntGa | 2026-10-04 | fix: accept dedicated R2 proof bucket and listed upload IDs |
+| [PR #273](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/273) | AntGa | 2026-10-04 | feat: add anonymous web profiles and posts |
+| [PR #276](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/276) | AntGa | 2026-10-04 | feat: add anonymous Flutter profiles and posts |
+| [PR #277](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/277) | AntGa | 2026-10-04 | test: verify synthetic export journeys on emulator and web |
+| [PR #236](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/236) | jebadenas | 2026-10-04 | feat: like and comment on posts |
+| [PR #280](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/280) | AntGa | 2026-10-04 | test: verify restricted staging export worker target |
+| [PR #281](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/281) | AntGa | 2026-10-04 | test: colocate API tests under __tests__ |
+| [PR #279](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/279) | joohuil | 2026-10-04 | feat(mobile): in-app audio capture |
+| [PR #282](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/282) | AntGa | 2026-10-04 | feat: fence staging export proof to one synthetic owner |
+| [PR #278](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/278) | AntGa | 2026-10-04 | docs: Dayli Documentation |
+| [PR #275](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/275) | AntGa | 2026-10-04 | fix: stabilize messaging and sign-in browser journeys |
+| [PR #267](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/267) | AntGa | 2026-10-04 | docs: publish approved messaging execution plans |
+| [PR #283](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/283) | joohuil | 2026-10-04 | feat: app icon, launch screen and favicon |
+| [PR #253](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/253) | jebadenas | 2026-10-04 | feat: show owner-only On This Day memories |
+| [PR #271](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/271) | AntGa | 2026-10-04 | feat: add staging push readiness checks |
+| [PR #269](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/269) | AntGa | 2026-10-04 | feat: add notification consent storage |
+| [PR #272](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/272) | AntGa | 2026-10-04 | feat: enforce direct message send quota |
+| [PR #285](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/285) | AntGa | 2026-10-04 | docs: refresh guides and fix deployed api reference |
+| [PR #284](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/284) | AntGa | 2026-10-04 | fix: diagnose staging auth smoke login failures safely |
+| [PR #288](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/288) | AntGa | 2026-10-04 | feat: add web loading skeletons |
+| [PR #291](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/291) | AntGa | 2026-10-04 | fix: build web app with webpack |
+| [PR #248](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/248) | jebadenas | 2026-10-04 | feat: show mood history on profiles |
+| [PR #254](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/254) | jebadenas | 2026-10-04 | feat: write notes to your future self |
+| [PR #289](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/289) | AntGa | 2026-10-04 | feat: enable reviewed staging-only account exports |
+| [PR #286](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/286) | jebadenas | 2026-10-04 | fix: align privacy guidance with public profile reads |
+| [PR #237](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/237) | jebadenas | 2026-10-04 | feat: like and comment on posts in web and Flutter |
+| [PR #240](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/240) | jebadenas | 2026-10-04 | feat: show like and comment counts on cards and loved on profiles |
+| [PR #247](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/247) | jebadenas | 2026-10-04 | feat: show today's post and an offline streak in the mobile app |
+| [PR #292](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/292) | AntGa | 2026-10-04 | test: prove accelerated cleanup only for the staging smoke export |
+| [PR #293](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/293) | jebadenas | 2026-10-04 | fix: keep the mood line visible between neighbouring days |
+| [PR #296](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/296) | AntGa | 2026-10-04 | feat: deliver direct message notification previews |
+| [PR #256](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/256) | jebadenas | 2026-10-04 | feat: open today's composer from Siri and Android shortcuts |
+| [PR #295](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/295) | AntGa | 2026-10-04 | test: optimize web e2e discovery and waits |
+| [PR #294](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/294) | joohuil | 2026-10-04 | feat: add weather to posts |
+| [PR #298](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/298) | AntGa | 2026-10-04 | docs: record public-pilot privacy decisions and correct draft notices |
+| [PR #299](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/299) | jebadenas | 2026-10-04 | docs: cover mood history, On This Day, future-self notes, and composer links in the systems docs |
+| [PR #297](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/297) | andrewqqiu | 2026-10-04 | feat: global design review pass |
+| [PR #302](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/302) | jebadenas | 2026-10-04 | fix(web): keep the sidebar on profile pages and open settings from the account row |
+| [PR #305](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/305) | AntGa | 2026-10-04 | fix: refresh shared session after email sign-in |
+| [PR #306](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/306) | joohuil | 2026-10-04 | docs: update weather docs |
+| [PR #307](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/307) | jebadenas | 2026-10-04 | docs: add a guide to try the mobile app against staging |
+| [PR #287](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/287) | andrewqqiu | 2026-10-04 | feat: add option of face unlock for the app (1/2) |
+| [PR #308](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/308) | jebadenas | 2026-10-04 | docs: require Flutter 3.47 for the mobile staging guide |
+| [PR #300](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/300) | AntGa | 2026-10-04 | feat: mobile consent and friend request and daily notifications |
+| [PR #309](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/309) | andrewqqiu | 2026-10-04 | docs: create mobile biometrics docs |
+
+</details>
+
+Main-branch commit references:
+
+- [c3d9d0c7](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/commit/c3d9d0c70472354759ec811017e8e4460aa7fb9a): Style auth emails to match Dayli (Anton Garay, 2026-09-28).
+- [f00dc1a9](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/commit/f00dc1a988428052f71abde7370ceee948fa2255): chore: add a couple biometrics notes (Andrew Qiu, 2026-10-04).
+
+[All weekly records](/docs/team) · [Team contributions](/docs/team/task-breakdown)

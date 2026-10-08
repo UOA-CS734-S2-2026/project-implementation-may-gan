@@ -1,0 +1,72 @@
+---
+title: Week of 2026-09-21
+description: Authentication, daily posting, and private media foundations
+---
+
+Period: 21 to 27 September 2026 (Pacific/Auckland).
+
+We merged our first application foundations this week. Our work covered authentication (Anton), the posting model and composers (Jos), and private media reservations (JooHui).
+
+## Our progress
+
+- We merged Anton's Better Auth proof in [PR #71](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/71), followed by the Supabase-to-Neon boundary ([PR #82](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/82)), PostgreSQL persistence ([PR #83](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/83)), user/login migrations ([PR #84](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/84)), and Google sign-in and auth emails ([PR #85](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/85)).
+- We added private R2 uploads and media reservations (JooHui) in [PR #86](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/86) for [#21](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/21).
+- We built Auckland posting-day rules, prompts, post storage, relationships, and permission filters (Jos). We merged these foundations in [PR #97](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/97), [PR #98](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/98), [PR #108](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/108), [PR #111](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/111), [PR #112](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/112), and [PR #109](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/109).
+- We temporarily reverted our stack integration in [PR #94](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/94) after [PR #93](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/93). We then merged the individual foundations through separate PRs.
+- We added idempotent post creation and the web composer (Jos) in [PR #113](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/113), then the Flutter shell, protected draft storage, and composer in [PR #114](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/114).
+- We consolidated local auth setup (Anton) in [PR #115](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/115) and prepared staging deployment and authentication configuration in [PR #117](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/117), [PR #118](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/118), and [PR #122](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/122).
+
+## Next steps
+
+We still needed to connect our Flutter composer to post submission, complete upload validation, and build our friends feed and post detail views.
+
+## Source record
+
+<details>
+<summary>Merged pull requests for this week</summary>
+
+| PR | Author | Merged (Auckland) | Change |
+| --- | --- | --- | --- |
+| [PR #82](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/82) | AntGa | 2026-09-21 | Define the Supabase to Neon migration boundary |
+| [PR #71](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/71) | AntGa | 2026-09-21 | Prove Better Auth on Workers and Flutter |
+| [PR #83](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/83) | AntGa | 2026-09-21 | Add Better Auth PostgreSQL persistence |
+| [PR #84](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/84) | AntGa | 2026-09-21 | Add users and login accounts migration to Neon |
+| [PR #85](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/85) | AntGa | 2026-09-21 | Add Google sign-in and Resend auth emails |
+| [PR #86](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/86) | joohuil | 2026-09-24 | feat: private r2 uploads with media reservation |
+| [PR #87](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/87) | jebadenas | 2026-09-24 | feat: add Auckland posting-day foundation |
+| [PR #88](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/88) | jebadenas | 2026-09-24 | feat: add immutable daily prompt catalog |
+| [PR #89](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/89) | jebadenas | 2026-09-24 | feat: add daily post storage foundation |
+| [PR #90](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/90) | jebadenas | 2026-09-24 | feat: add current posting-day endpoint |
+| [PR #91](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/91) | jebadenas | 2026-09-24 | feat: add relationship foundation |
+| [PR #92](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/92) | jebadenas | 2026-09-24 | feat: add daily-post permission filters |
+| [PR #93](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/93) | jebadenas | 2026-09-24 | feat: integrate daily-post foundation stack |
+| [PR #94](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/94) | jebadenas | 2026-09-24 | revert: temporarily remove unreviewed stack integration |
+| [PR #97](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/97) | jebadenas | 2026-09-24 | feat: add Auckland posting-day foundation |
+| [PR #98](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/98) | jebadenas | 2026-09-24 | feat: add immutable daily prompt catalog |
+| [PR #99](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/99) | jebadenas | 2026-09-24 | feat: add daily post storage foundation |
+| [PR #100](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/100) | jebadenas | 2026-09-24 | feat: add current posting-day endpoint |
+| [PR #101](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/101) | jebadenas | 2026-09-24 | feat: add relationship foundation |
+| [PR #102](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/102) | jebadenas | 2026-09-24 | feat: add daily-post permission filters |
+| [PR #110](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/110) | jebadenas | 2026-09-25 | feat: add immutable daily prompt catalog |
+| [PR #108](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/108) | jebadenas | 2026-09-25 | feat: add daily post storage foundation |
+| [PR #111](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/111) | jebadenas | 2026-09-25 | feat: add current posting-day endpoint |
+| [PR #112](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/112) | jebadenas | 2026-09-25 | feat: add relationship foundation |
+| [PR #109](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/109) | jebadenas | 2026-09-25 | feat: add daily-post permission filters |
+| [PR #113](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/113) | jebadenas | 2026-09-26 | feat: idempotent daily post creation and WDCC web composer (#16, #44, #45) |
+| [PR #114](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/114) | jebadenas | 2026-09-26 | feat(mobile): Flutter app shell, protected drafts, and daily composer (#17, #18) |
+| [PR #115](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/115) | AntGa | 2026-09-27 | chore: consolidate local auth and environment setup |
+| [PR #117](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/117) | AntGa | 2026-09-27 | Keep staging API off workers.dev |
+| [PR #119](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/119) | AntGa | 2026-09-27 | Update staging Hyperdrive RPC test harness |
+| [PR #120](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/120) | AntGa | 2026-09-27 | Give staging transaction proof a bounded timeout |
+| [PR #121](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/121) | AntGa | 2026-09-27 | Write staging Hyperdrive proof evidence on runner |
+| [PR #118](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/118) | AntGa | 2026-09-27 | Prepare reversible vinext staging web deployment |
+| [PR #122](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/122) | AntGa | 2026-09-27 | Prepare staging Google OAuth and Resend password reset |
+
+</details>
+
+Main-branch commit references:
+
+- [557c1294](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/commit/557c129471bbe35814bde810b0aee997a60b3e59): Merge pull request #82 from UOA-CS734-S2-2026/chore/supabase-neon-migration-boundary (Anton Garay, 2026-09-21).
+- [60be6f85](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/commit/60be6f852485276fbe572e6f4c4b840e76d83f69): Prepare staging Google OAuth and Resend password reset (#122) (Anton Garay, 2026-09-27).
+
+[All weekly records](/docs/team) · [Team contributions](/docs/team/task-breakdown)
