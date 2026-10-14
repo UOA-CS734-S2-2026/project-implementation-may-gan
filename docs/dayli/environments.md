@@ -80,6 +80,34 @@ DAYLI_DEV_DB_RESET='DELETE development database' pnpm db:dev:reset
 
 Do not point `MIGRATION_TARGET=development` at another host, port, database, or role. The migration tools reject every value except `migrator@localhost:5434/dayli_dev`. Do not use `pnpm verify:local` as a local-auth database reset: it creates and destroys an isolated fixture instead.
 
+### Local media store
+
+`pnpm dev:api:https` also starts `scripts/dev-media-server.mjs`, a small S3-compatible object store on `http://127.0.0.1:8788`, and points the Worker at it through the reserved `R2_ACCOUNT_ID=local-e2e` and a loopback `R2_LOCAL_ENDPOINT`. The placeholder R2 values it passes are not credentials, and nothing is sent to Cloudflare R2. Objects are stored under `$XDG_STATE_HOME/dayli/media` or `~/.local/state/dayli/media`, outside the repository. The store stops when the API stops.
+
+- If a store is already answering on port 8788, for example from `pnpm dev:media` in another terminal, the API uses that one.
+- Set `DAYLI_LOCAL_MEDIA=0` to start the API without media configuration, as before.
+- Feed and post detail responses return presigned URLs that point straight at `127.0.0.1:8788`. On an Android emulator or USB device, also run `adb reverse tcp:8788 tcp:8788`. The iOS Simulator shares the host loopback and needs nothing extra.
+- The e2e fixture `scripts/fixtures/local-s3-media-server.mjs` is separate and unchanged.
+
+### Demo data
+
+`pnpm db:dev:seed` fills the development database with synthetic data:
+
+- About 150 personas with 400 days of posts, photos, tomorrow notes, likes, comments, friendships, friend requests, and direct messages.
+- A demo account, **May Gan**: sign in with `may@dayli.test` / `dayli-demo-2026`. Every seeded persona uses the same password, with email `<username>@seed.dayli.test`.
+
+May has 30 friends, an ended friendship, 5 incoming and 3 outgoing friend requests, 12 chats (4 with unread messages), 2 message requests, a 23-day posting streak ending yesterday, and On This Day posts. Today is left open so she can post.
+
+```bash
+pnpm db:dev:up && pnpm db:dev:migrate   # if the database isn't running yet
+pnpm db:dev:seed                        # [--users 150] [--days 400] [--seed 734] [--no-photos] [--offline]
+pnpm dev:api:https
+```
+
+- **Safety:** the seed runs as the local `migrator` role and refuses every target except `migrator@localhost:5434/dayli_dev`. Each run first removes accounts from the previous seed (IDs starting with `seed_`) and their media objects. It never touches accounts you created yourself.
+- **Feed refresh:** the feed shows friends' posts from yesterday (Auckland time), so re-run the seed on a later day to refresh it.
+- **Photos:** come from [Lorem Picsum](https://picsum.photos) on the first run and are cached under `~/.local/state/dayli/demo-photos`. With `--offline`, or if downloads fail, the seed generates gradient images instead. Attachments are hard links, so tens of thousands of attachments take only a few megabytes. No image files are committed.
+
 ## Android debug builds
 
 Android local authentication remains HTTPS-only. No manifest enables cleartext traffic.

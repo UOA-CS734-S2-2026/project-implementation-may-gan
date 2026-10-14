@@ -17,6 +17,11 @@ web_env="$repo_root/apps/web/.env.local"
 api_origin="https://localhost:8787"
 web_origin="https://localhost:3000"
 trusted_origins="$api_origin,$web_origin"
+# Loopback-only S3 mock for local photo uploads and downloads. See scripts/dev-media-server.mjs.
+media_port="${DAYLI_MEDIA_PORT:-8788}"
+media_root="${DAYLI_MEDIA_ROOT:-$state_dir/media}"
+media_origin="http://127.0.0.1:$media_port"
+media_pid=""
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -149,6 +154,43 @@ read_app_database_password() {
   printf '%s' "$password"
 }
 
+media_store_ready() {
+  curl -fsS --max-time 1 "$media_origin/health" >/dev/null 2>&1
+}
+
+stop_media_store() {
+  if [[ -n "$media_pid" ]]; then
+    kill "$media_pid" 2>/dev/null || true
+  fi
+}
+
+# Starts the local media store unless one is already answering, for example
+# from `pnpm dev:media` in another terminal. A store started here stops with the API.
+start_media_store_if_needed() {
+  require_command curl
+  require_command node
+  if media_store_ready; then
+    echo "Using the local media store already running on $media_origin."
+    return
+  fi
+  mkdir -p "$media_root"
+  node "$repo_root/scripts/dev-media-server.mjs" "$media_root" "$media_port" &
+  media_pid=$!
+  trap stop_media_store EXIT
+  local attempt
+  for attempt in $(seq 1 50); do
+    if media_store_ready; then
+      return
+    fi
+    if ! kill -0 "$media_pid" 2>/dev/null; then
+      break
+    fi
+    sleep 0.1
+  done
+  echo "The local media store did not start on $media_origin." >&2
+  exit 1
+}
+
 start_api() {
   require_setup
   if [[ ! -e "$credentials_file" ]]; then
@@ -157,15 +199,30 @@ start_api() {
   fi
   local app_database_password
   app_database_password="$(read_app_database_password)"
+  # The API accepts R2_LOCAL_ENDPOINT only for the reserved local-e2e account
+  # and only on loopback HTTP. These are placeholder values, not credentials.
+  local media_vars=()
+  if [[ "${DAYLI_LOCAL_MEDIA:-1}" != "0" ]]; then
+    start_media_store_if_needed
+    media_vars=(
+      --var 'R2_ACCOUNT_ID:local-e2e'
+      --var 'R2_BUCKET_NAME:dayli-media-local'
+      --var 'R2_ACCESS_KEY_ID:local-media-access'
+      --var 'R2_SECRET_ACCESS_KEY:local-media-secret-that-is-not-a-real-credential'
+      --var "R2_LOCAL_ENDPOINT:$media_origin"
+    )
+  fi
   cd "$repo_root/apps/api"
   # Start with a deliberately small environment. The Worker receives only its
-  # restricted app connection URL, never owner or migrator credentials.
-  exec env -i \
+  # restricted app connection URL, never owner or migrator credentials. This is
+  # not exec'd so the media store started above is stopped when Wrangler exits.
+  env -i \
     HOME="$HOME" PATH="$PATH" TMPDIR="${TMPDIR:-/tmp}" LANG="${LANG:-C}" \
     CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="postgresql://app:${app_database_password}@localhost:5434/dayli_dev" \
     pnpm exec wrangler dev --config wrangler.local.jsonc --local \
       --ip 127.0.0.1 --port 8787 --local-protocol https \
-      --https-key-path "$key" --https-cert-path "$certificate"
+      --https-key-path "$key" --https-cert-path "$certificate" \
+      ${media_vars[@]+"${media_vars[@]}"}
 }
 
 start_web() {

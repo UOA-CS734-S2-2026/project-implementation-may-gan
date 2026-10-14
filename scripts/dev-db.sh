@@ -110,6 +110,20 @@ case "${1:-}" in
     load_credentials
     MIGRATION_TARGET=development DATABASE_URL="$(migrator_url)" pnpm --filter @dayli/db db:verify
     ;;
+  seed)
+    # Synthetic demo data for local development only. The script itself also
+    # refuses any target other than migrator@localhost:5434/dayli_dev.
+    require_docker
+    create_credentials_if_needed
+    chmod 600 "$credentials_file"
+    compose up -d --wait
+    load_credentials
+    shift
+    cd "$repo_root"
+    MIGRATION_TARGET=development DATABASE_URL="$(migrator_url)" \
+      DAYLI_STATE_DIR="$state_dir" \
+      pnpm exec tsx apps/api/scripts/seed-dev/index.ts "$@"
+    ;;
   studio)
     require_docker
     if [[ ! -f "$credentials_file" ]]; then
@@ -120,7 +134,7 @@ case "${1:-}" in
     exec pnpm exec drizzle-kit studio --config drizzle.studio.config.ts --host=127.0.0.1
     ;;
   *)
-    echo "Usage: $0 {up|down|reset|migrate|verify|studio}" >&2
+    echo "Usage: $0 {up|down|reset|migrate|verify|seed|studio}" >&2
     exit 1
     ;;
 esac
