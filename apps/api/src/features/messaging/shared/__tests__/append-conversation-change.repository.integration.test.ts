@@ -36,7 +36,11 @@ suite("conversation change builders", () => {
   async function createConversation() {
     const conversationId = crypto.randomUUID();
     const messageId = crypto.randomUUID();
-    const now = new Date("2026-09-30T00:00:00.000Z");
+    // Notification expiry is checked against the database's real clock.
+    // Keep source timestamps current so this fixture does not expire over time.
+    const now = new Date();
+    // Use whole seconds to keep serialized timestamp comparisons stable.
+    now.setMilliseconds(0);
     await database.db.delete(schema.conversations).where(and(
       eq(schema.conversations.userLowId, users[0]!),
       eq(schema.conversations.userHighId, users[1]!),
@@ -294,6 +298,15 @@ suite("conversation change builders", () => {
     await expect(resolver.resolve(deliveryJob)).resolves.toMatchObject({
       token: "fake-provider-token", title: users[0], body: "message", targetId: conversationId,
     });
+
+    await database.db.update(schema.notificationEvents)
+      .set({ createdAt: sql`now() - interval '8 days'`, expiresAt: sql`now() - interval '1 second'` })
+      .where(eq(schema.notificationEvents.id, events[0]!.id));
+    await expect(resolver.resolve(deliveryJob)).resolves.toBeNull();
+    await database.db.update(schema.notificationEvents)
+      .set({ createdAt: events[0]!.createdAt, expiresAt: events[0]!.expiresAt })
+      .where(eq(schema.notificationEvents.id, events[0]!.id));
+    await expect(resolver.resolve(deliveryJob)).resolves.toMatchObject({ body: "message" });
 
     await database.db.update(schema.messages).set({ body: "edited preview", editedAt: new Date() })
       .where(eq(schema.messages.id, messageId));
