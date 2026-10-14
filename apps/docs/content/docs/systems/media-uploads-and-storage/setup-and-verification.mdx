@@ -70,16 +70,18 @@ That proof used `curl`. It did not send a browser CORS preflight. It also predat
 
 ## Browser upload check
 
-Web post attachments are not uploaded today, but web profile avatar upload already uses direct R2 transfer. A staging browser check should therefore use a synthetic avatar and confirm:
+Web post attachments and profile avatars use direct R2 transfer. A staging browser check should use a synthetic photo in the post composer and confirm:
 
 1. Reservation succeeds while signed in through the web application.
 2. The browser's CORS preflight permits the exact origin, method, and signed headers.
 3. R2 accepts the `PUT`.
 4. `/complete` validates the object.
-5. Setting the avatar succeeds and the profile can read it.
+5. Creating the post succeeds with the validated reservation ID in `attachments`, and the author can read its photo.
 6. A disallowed origin or missing signed header fails.
 
 Do not use `curl` as evidence for step 2. It does not exercise browser CORS.
+
+Also confirm that a failed upload keeps the draft on screen without creating a post, and retrying a lost post response reuses the same attachment IDs and idempotency key. Repeat the browser transfer check for a synthetic profile avatar in Settings.
 
 ## Download checks
 

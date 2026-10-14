@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import { awaitRpcDeployment } from "../rpc-deployment-readiness";
+import { awaitRpcDeployment, awaitStagingRevision } from "../rpc-deployment-readiness";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -16,9 +16,9 @@ describe("private staging Trash attestation", () => {
   it("matches the exact deployed revision", async () => {
     expect(env.EXPECTED_STAGING_RELEASE_SHA).toMatch(/^[a-f0-9]{40}$/);
     expect(env.EXPECTED_STAGING_STORAGE_DIGEST).toMatch(/^[a-f0-9]{64}$/);
-    const proof = await awaitRpcDeployment(
-      "proveStagingRevision",
+    const proof = await awaitStagingRevision(
       () => env.STAGING_API.proveStagingRevision(),
+      { revision: env.EXPECTED_STAGING_RELEASE_SHA, storageDigest: env.EXPECTED_STAGING_STORAGE_DIGEST },
     );
     expect(proof).toEqual({
       revision: env.EXPECTED_STAGING_RELEASE_SHA,

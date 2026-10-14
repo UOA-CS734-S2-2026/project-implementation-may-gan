@@ -41,7 +41,8 @@ export async function cropImage(
         reject(new Error("Canvas is empty"));
         return;
       }
-      resolve(new File([blob], fileName, { type: fileType }));
+      // Canvas may fall back to PNG when it cannot encode the source format.
+      resolve(new File([blob], fileName, { type: blob.type }));
     }, fileType);
   });
 }

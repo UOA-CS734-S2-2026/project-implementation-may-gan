@@ -124,11 +124,11 @@ Profile avatars follow the same idea at `GET /api/v1/profiles/{username}/avatar`
 
 ## What the clients do today
 
-The two post composers are not at the same stage.
+Both post composers upload and validate attachments before creating the post.
 
 **Flutter implements post uploads.** It compresses attachments into per-user application support storage, strips photo EXIF and video metadata, checks client-side limits, and uploads one file at a time while the composer is open. Draft state keeps the compressed path, reservation ID, size, type, and status. The signed URL stays in memory only. After a restart, the app calls `/complete` first, then reserves and uploads again if needed. Posting waits until every attachment is validated.
 
-**Web does not upload post attachments yet.** Its composer lets someone select photos or video, but explains that the files remain on the device and submits a text-only post. Web does use the reservation flow for profile avatar uploads from Settings. Browser upload therefore depends on the R2 bucket's CORS policy even though browser post uploads are still missing.
+**Web uploads post attachments when Post is pressed.** It checks file types, counts, individual sizes, and the combined size, then reserves, uploads, and validates each selected file in display order. It sends the validated reservation IDs in `attachments` and keeps the form locked during submission. Failed uploads leave the draft on screen and do not create a text-only post. The open composer retains upload state and the idempotency key for retries, including recovery from a lost upload or post response. Reloading the page does not retain this state. Web also uses the reservation flow for profile avatar uploads from Settings. Both browser flows depend on the R2 bucket's CORS policy.
 
 Both clients can display authorized post media. Their feed cards show the first photo and a non-playing video tile. Post detail shows all photos or the single looping video.
 

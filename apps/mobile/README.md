@@ -47,13 +47,22 @@ Without the Dart IDs the button explains that Google sign-in isn't set up for th
 
 The registered Android and iOS staging client metadata is checked in as typed `FirebaseOptions` in `lib/firebase_options.dart`. Firebase client options identify an app and project. They are public mobile configuration, not a service-account key, APNs key, server credential, or signing credential.
 
-Firebase remains off unless a debug build sets `DAYLI_FIREBASE_CONFIGURED=true`:
+Firebase is enabled by default in iOS debug builds, which already include the push entitlement and remote-notification background mode. The account's notification preference remains off until the user enables it in Settings; startup does not request OS permission. Android debug builds still require `DAYLI_FIREBASE_CONFIGURED=true`:
 
 ```bash
 flutter run --debug \
   --dart-define=DAYLI_API_BASE_URL=https://api.example.test \
   --dart-define=DAYLI_FIREBASE_CONFIGURED=true
 ```
+
+For an iOS debug build, the API origin is sufficient:
+
+```sh
+flutter run --debug \
+  --dart-define=DAYLI_API_BASE_URL=https://api.staging.dayli.agroupforcoders.com
+```
+
+Set `--dart-define=DAYLI_FIREBASE_CONFIGURED=false` to explicitly disable Firebase in an iOS debug build. This produces the Settings message "This build cannot receive notifications." That message means the build did not construct a push service, rather than that iOS denied notification permission. Rebuild and reinstall after changing build flags; hot reload does not change them.
 
 Android debug builds use the registered `nz.ac.auckland.dayli.dayli_mobile.staging` application ID. iOS debug builds use `nz.ac.auckland.dayli.dayliMobile`, the same bundle ID currently used by every Xcode configuration. The iOS push entitlement and remote-notification background mode exist only in the Debug configuration. Release and profile builds contain no native Firebase resource, and setting the Dart flag in either mode stops startup instead of selecting the staging project.
 
