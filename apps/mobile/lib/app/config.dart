@@ -1,3 +1,18 @@
+import 'package:flutter/foundation.dart';
+
+/// The registered iOS debug app includes the native push entitlement.
+/// An explicit build flag still takes precedence, including an opt-out.
+bool firebasePushConfiguredForBuild({
+  TargetPlatform? platform,
+  bool debugMode = kDebugMode,
+  bool web = kIsWeb,
+  bool? configured,
+}) =>
+    configured ??
+    (!web &&
+        debugMode &&
+        (platform ?? defaultTargetPlatform) == TargetPlatform.iOS);
+
 /// Build-time configuration passed with `--dart-define`.
 class AppConfig {
   const AppConfig({
@@ -39,12 +54,20 @@ class AppConfig {
         'Set --dart-define=DAYLI_API_BASE_URL=<api origin> to run Dayli.',
       );
     }
-    return const AppConfig(
+    return AppConfig(
       apiBaseUrl: apiBaseUrl,
-      googleWebClientId: String.fromEnvironment('DAYLI_GOOGLE_WEB_CLIENT_ID'),
-      googleIosClientId: String.fromEnvironment('DAYLI_GOOGLE_IOS_CLIENT_ID'),
-      firebaseConfigured: bool.fromEnvironment('DAYLI_FIREBASE_CONFIGURED'),
-      stagingExportApproved: bool.fromEnvironment(
+      googleWebClientId: const String.fromEnvironment(
+        'DAYLI_GOOGLE_WEB_CLIENT_ID',
+      ),
+      googleIosClientId: const String.fromEnvironment(
+        'DAYLI_GOOGLE_IOS_CLIENT_ID',
+      ),
+      firebaseConfigured: firebasePushConfiguredForBuild(
+        configured: const bool.hasEnvironment('DAYLI_FIREBASE_CONFIGURED')
+            ? const bool.fromEnvironment('DAYLI_FIREBASE_CONFIGURED')
+            : null,
+      ),
+      stagingExportApproved: const bool.fromEnvironment(
         'DAYLI_STAGING_EXPORT_APPROVED',
       ),
     );

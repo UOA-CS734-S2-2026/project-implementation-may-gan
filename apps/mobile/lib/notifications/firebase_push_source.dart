@@ -182,9 +182,10 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage _) async {
   await initializeStagingFirebaseApp();
 }
 
-/// Initializes push only when the build has explicitly opted in.
+/// Initializes push when the build configuration enables it.
 ///
-/// The switch defaults to false. An enabled release or profile build fails
+/// iOS debug builds default to enabled unless explicitly opted out. Other
+/// builds require the explicit flag. An enabled release or profile build fails
 /// closed because [stagingFirebaseOptions] rejects non-debug builds.
 Future<bool> initializeFirebasePushIfConfigured(
   bool configured, {
