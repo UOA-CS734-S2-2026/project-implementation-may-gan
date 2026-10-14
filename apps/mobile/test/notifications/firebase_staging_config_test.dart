@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:dayli_mobile/app/config.dart';
 import 'package:dayli_mobile/firebase_options.dart';
 import 'package:dayli_mobile/notifications/firebase_push_source.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -64,6 +65,30 @@ void main() {
   });
 
   group('push initialization', () {
+    test('default iOS debug build initializes push support', () async {
+      FirebaseOptions? initializedWith;
+      BackgroundMessageHandler? registeredHandler;
+
+      final result = await initializeFirebasePushIfConfigured(
+        firebasePushConfiguredForBuild(
+          platform: TargetPlatform.iOS,
+          debugMode: true,
+        ),
+        platform: TargetPlatform.iOS,
+        debugMode: true,
+        initializer: (options) async {
+          initializedWith = options;
+        },
+        registerBackgroundHandler: (handler) {
+          registeredHandler = handler;
+        },
+      );
+
+      expect(result, isTrue);
+      expect(initializedWith?.iosBundleId, 'nz.ac.auckland.dayli.dayliMobile');
+      expect(registeredHandler, same(firebaseMessagingBackgroundHandler));
+    });
+
     test('disabled flag does not initialize or register a handler', () async {
       var initialized = false;
       var registered = false;
