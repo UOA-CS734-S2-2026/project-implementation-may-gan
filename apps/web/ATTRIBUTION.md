@@ -23,7 +23,7 @@ data is stubbed.
 | Navigation | `components/ui/layout/Navbar.tsx`, `components/ui/layout/NavSearch.tsx` | Client component using the Better Auth session. Profile links use the user id and the profile shows the email until usernames exist (#68). User search returns no results until the profile API. |
 | Session and auth | `lib/auth/client.ts`, `lib/session/*`, `lib/theme/provider.tsx`, `components/auth/GoogleSignInButton.tsx`, `app/(auth)/sign-in`, `app/(auth)/sign-up` | Better Auth client points at the API origin with credentials. Sign-in and sign-up use email until the profile API adds usernames in #68. A "Forgot password?" link reaches the existing reset flow. |
 | Feed | `app/(main)/home` | WDCC's feed grid and empty state; the feed is empty until the released-feed API (#19). |
-| Composer | `app/(main)/post` | WDCC's media-first flow submits through `POST /api/v1/posts` with an idempotency key and audience `friends`. Chosen media is not uploaded until the media API lands. Editing and deleting are not available yet. |
+| Composer | `app/(main)/post` | WDCC's media-first flow uploads and validates chosen photos or video through the media reservation API, then submits their IDs through `POST /api/v1/posts` with an idempotency key and the chosen friends or solo audience. |
 | Settings | `app/(main)/settings` | Username shows "not set yet" and the visibility switch is disabled until the profile API (#68). |
 | Placeholders | `app/(main)/[username]`, `app/(main)/[username]/friends`, `app/(main)/messages`, `components/ui/ComingSoon.tsx` | New: WDCC-styled placeholders so the WDCC navigation works until those APIs land. |
 
