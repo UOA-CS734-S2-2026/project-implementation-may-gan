@@ -10,7 +10,8 @@ import { FormInput } from "@/components/ui/FormInput";
 import { MediaInput } from "@/components/ui/MediaInput";
 import { Button } from "@/components/ui/core/Button";
 import {
-  submitDailyPost,
+  createDailyPostSubmitter,
+  validatePostMedia,
   type ApiFailure,
   type PostingDay,
 } from "@/lib/api/daily-posts";
@@ -52,23 +53,10 @@ const postSchema = z.object({
   audience: z.enum(["friends", "solo"], {
     error: "Choose who can see this dayli",
   }),
-  media: z.array(z.instanceof(File)).refine(
-    (files) => {
-      if (!files?.length) return true;
-
-      const images = files.filter((f) => f.type.startsWith("image/"));
-      const videos = files.filter((f) => f.type.startsWith("video/"));
-
-      if (images.length && videos.length) return false;
-      if (images.length > 3) return false;
-      if (videos.length > 1) return false;
-
-      return true;
-    },
-    {
-      message: "Upload max 3 images or 1 video",
-    }
-  ),
+  media: z.array(z.instanceof(File)).superRefine((files, context) => {
+    const message = validatePostMedia(files);
+    if (message) context.addIssue({ code: "custom", message });
+  }),
 });
 
 type PostValues = z.infer<typeof postSchema>;
@@ -102,6 +90,10 @@ function failureMessage(failure: ApiFailure): string {
           return "An earlier version of this draft was already posted. These edits cannot be posted with this submission key, so copy them before leaving this page.";
         case "POST_TRASHED":
           return "This dayli was posted and then moved to Trash. Your words are still here; post again to share them.";
+        case "MEDIA_NOT_READY":
+          return "An attachment is still being checked. Try posting again shortly.";
+        case "MEDIA_UNAVAILABLE":
+          return "An attachment is no longer available. Post again to upload it again.";
         default:
           return failure.message;
       }
@@ -117,6 +109,7 @@ export default function PostForm({
   // One key per draft: every retry of this draft reuses it, so a lost
   // response can be retried without ever creating a second post.
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  const [submitPost] = useState(() => createDailyPostSubmitter());
 
   const {
     control,
@@ -136,10 +129,9 @@ export default function PostForm({
     caption,
     tomorrowNote,
     audience,
+    media,
   }: PostValues) => {
-    // Media is optional. Upload arrives with the media API; until then the
-    // post is sent as text only and any chosen files stay on this device.
-    const result = await submitDailyPost(
+    const result = await submitPost(
       {
         localDate: postingDay.localDate,
         promptId: postingDay.prompt.id,
@@ -149,6 +141,7 @@ export default function PostForm({
         ...(caption ? { caption } : {}),
         ...(tomorrowNote ? { tomorrowNote } : {}),
       },
+      media,
       idempotencyKey
     );
 
@@ -182,58 +175,62 @@ export default function PostForm({
   return (
     <div className="p-8 bg-white rounded-2xl shadow-card">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <MediaInput control={control} name="media" />
-
-        <p className="text-sm text-foreground-secondary">
-          Photos and videos are optional. They stay on this device for now and
-          aren&apos;t posted yet.
-        </p>
-
-        <div className="space-y-5 mt-9">
-          <h2 className="pt-5 font-semibold tracking-tighter font-serif text-xl pb-2">
-            A bit about your day...
-          </h2>
-          <RatingInput control={control} name="dayRating" />
-          <FormInput
-            control={control}
-            name="promptResponse"
-            label={postingDay.prompt.text}
-            variant="posts"
-          />
-          <FormInput
-            control={control}
-            name="caption"
-            label="Word dump"
-            variant="posts"
-            multiline
-            rows={4}
-          />
-          <FormInput
-            control={control}
-            name="tomorrowNote"
-            label="Note to tomorrow's you (only you can read it, from tomorrow)"
-            placeholder="Something to remember tomorrow (optional)"
-            variant="posts"
-            multiline
-            rows={2}
-          />
-          <AudienceInput control={control} name="audience" />
-
-          {errors.root && (
-            <p className="text-sm text-red-500">{errors.root.message}</p>
-          )}
-
-          <div className="flex gap-3 pt-4">
-            <Button
-              type="submit"
-              disabled={isSubmitting}
-              variant={{ weight: "secondary", color: "accent" }}
-              arrow
-            >
-              {isSubmitting ? "Posting..." : "Post"}
-            </Button>
+        <fieldset disabled={isSubmitting} className="space-y-4">
+          <div inert={isSubmitting}>
+            <MediaInput control={control} name="media" />
           </div>
-        </div>
+
+          <p className="text-sm text-foreground-secondary">
+            Add up to 3 photos or 1 video (up to 15 seconds). Each file can be
+            up to 10 MB, with 25 MB total. Photos and videos are optional.
+          </p>
+
+          <div className="space-y-5 mt-9">
+            <h2 className="pt-5 font-semibold tracking-tighter font-serif text-xl pb-2">
+              A bit about your day...
+            </h2>
+            <RatingInput control={control} name="dayRating" />
+            <FormInput
+              control={control}
+              name="promptResponse"
+              label={postingDay.prompt.text}
+              variant="posts"
+            />
+            <FormInput
+              control={control}
+              name="caption"
+              label="Word dump"
+              variant="posts"
+              multiline
+              rows={4}
+            />
+            <FormInput
+              control={control}
+              name="tomorrowNote"
+              label="Note to tomorrow's you (only you can read it, from tomorrow)"
+              placeholder="Something to remember tomorrow (optional)"
+              variant="posts"
+              multiline
+              rows={2}
+            />
+            <AudienceInput control={control} name="audience" />
+
+            {errors.root && (
+              <p className="text-sm text-red-500">{errors.root.message}</p>
+            )}
+
+            <div className="flex gap-3 pt-4">
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                variant={{ weight: "secondary", color: "accent" }}
+                arrow
+              >
+                {isSubmitting ? "Posting..." : "Post"}
+              </Button>
+            </div>
+          </div>
+        </fieldset>
       </form>
     </div>
   );

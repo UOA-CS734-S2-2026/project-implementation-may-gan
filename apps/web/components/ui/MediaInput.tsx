@@ -123,7 +123,7 @@ function SlotInner({
         id={inputId}
         label={isFirst ? "Drag and drop or click to upload" : undefined}
         variant={isFirst ? "primary" : "secondary"}
-        accept={isFirst ? "image/*,video/*" : "image/*"}
+        accept={isFirst ? "image/jpeg,image/png,image/webp,image/heic,video/mp4,video/quicktime" : "image/jpeg,image/png,image/webp,image/heic"}
         onChange={onChange}
         error={errorMessage}
         file={slot.file instanceof File ? slot.file : null}
@@ -309,7 +309,7 @@ export function MediaInput<T extends FieldValues>(props: Props<T>) {
         </div>
         {firstFileIsPhoto && (
           <p className="text-sm text-foreground-secondary">
-            {photoCount}/3 uploaded
+            {photoCount}/3 selected
           </p>
         )}
         {activeId !== null && (
