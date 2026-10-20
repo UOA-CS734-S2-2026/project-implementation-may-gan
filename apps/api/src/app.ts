@@ -82,7 +82,7 @@ import { registerFutureSelfNotesRoutes, type FutureSelfNotesRouteDependencies } 
 import { createFutureSelfNoteService } from "./features/future-self-notes/shared/future-self-note.service";
 import { createHyperdriveFutureSelfNoteStore } from "./features/future-self-notes/shared/future-self-note.repository";
 import { registerSystemRoutes } from "./features/system/system.routes";
-import { createPresignedDownloadUrl, createR2MediaObjectStore, readR2RuntimeConfiguration } from "./infrastructure/media/r2";
+import { createPresignedDownloadUrl, createR2MediaObjectStore, proxyLocalMediaObjectRequest, readR2RuntimeConfiguration } from "./infrastructure/media/r2";
 import { registerApplicationCors } from "./http/middleware/cors";
 import {
   createActorRateLimiter,
@@ -433,7 +433,10 @@ export function createApp({
 /** Build a Worker request app with all configured database-backed feature runtimes. */
 export function createAppForEnv(env: ApiEnv) {
   const configuration = readBetterAuthRuntimeConfiguration(env);
-  const r2Runtime = readR2RuntimeConfiguration(env);
+  const baseR2Runtime = readR2RuntimeConfiguration(env);
+  const r2Runtime = baseR2Runtime?.localEndpoint && configuration?.publicApiBaseURL
+    ? { ...baseR2Runtime, localPublicOrigin: configuration.publicApiBaseURL }
+    : baseR2Runtime;
   const media = configuration && r2Runtime
     ? {
         runtime: createHyperdriveMediaReservationRuntime(configuration.hyperdrive, r2Runtime),
@@ -728,6 +731,19 @@ export function createAppForEnv(env: ApiEnv) {
       }),
     },
   });
+  if (r2Runtime?.accountId === "local-e2e" && r2Runtime.localEndpoint) {
+    const localMediaPath = `/${encodeURIComponent(r2Runtime.bucketName)}/media/:ownerId/:reservationId`;
+    api.on(["GET", "HEAD", "PUT", "DELETE", "OPTIONS"], localMediaPath, (context) => {
+      const ownerId = context.req.param("ownerId") ?? "";
+      const reservationId = context.req.param("reservationId") ?? "";
+      return proxyLocalMediaObjectRequest(
+        r2Runtime,
+        `media/${ownerId}/${reservationId}`,
+        context.req.raw,
+        configuration?.trustedOrigins,
+      );
+    });
+  }
   if (!configuration) return api;
   registerPostgresBetterAuthRoutes(api, env, env.USER_REALTIME ? {
     revokeSessions: async (userId, sessionIds) => {

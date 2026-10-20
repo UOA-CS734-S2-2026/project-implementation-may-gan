@@ -86,17 +86,17 @@ Do not point `MIGRATION_TARGET=development` at another host, port, database, or 
 
 - If a store is already answering on port 8788, for example from `pnpm dev:media` in another terminal, the API uses that one.
 - Set `DAYLI_LOCAL_MEDIA=0` to start the API without media configuration, as before.
-- Feed and post detail responses return presigned URLs that point straight at `127.0.0.1:8788`. On an Android emulator or USB device, also run `adb reverse tcp:8788 tcp:8788`. The iOS Simulator shares the host loopback and needs nothing extra.
+- Feed, post detail, and media upload responses return HTTPS presigned URLs on the API origin (`https://localhost:8787/dayli-media-local/media/...`) when `PUBLIC_API_BASE_URL` is configured, and the local Worker proxies those object requests to `http://127.0.0.1:8788` so mobile HTTPS and TLS checks work without cleartext exceptions or an extra `adb reverse` port.
 - The e2e fixture `scripts/fixtures/local-s3-media-server.mjs` is separate and unchanged.
 
 ### Demo data
 
 `pnpm db:dev:seed` fills the development database with synthetic data:
 
-- About 150 personas with 400 days of posts, photos, tomorrow notes, likes, comments, friendships, friend requests, and direct messages.
+- About 150 personas with 400 days of posts, photos, post revisions, tomorrow notes, future-self notes, likes, comments, friendships, friend requests, direct messages, and notification preferences/events.
 - A demo account, **May Gan**: sign in with `may@dayli.test` / `dayli-demo-2026`. Every seeded persona uses the same password, with email `<username>@seed.dayli.test`.
 
-May has 30 friends, an ended friendship, 5 incoming and 3 outgoing friend requests, 12 chats (4 with unread messages), 2 message requests, a 23-day posting streak ending yesterday, and On This Day posts. Today is left open so she can post.
+May has 30 friends, an ended friendship, 5 incoming and 3 outgoing friend requests, 12 chats (4 with unread messages), 2 message requests, a 23-day posting streak ending yesterday (with an edit revision on yesterday's post), 3 future-self notes (1 delivered, 2 scheduled), push notifications enabled with seeded notification events, and On This Day posts. Today is left open so she can post.
 
 ```bash
 pnpm db:dev:up && pnpm db:dev:migrate   # if the database isn't running yet

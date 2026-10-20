@@ -827,6 +827,142 @@ async function main(): Promise<void> {
       buildConversation({ a, b, initiator: a, firstAt, lastAt, count: random.int(6, 40), requestState: "active" });
     }
 
+    // --- Post revisions, future-self notes, and notifications ----------------
+    const postRevisionRows: Array<typeof schema.postRevisions.$inferInsert> = [];
+    const postRowById = new Map(postRows.map((row) => [row.id, row]));
+    const mediaByPostId = new Map<string, Array<typeof schema.postMedia.$inferInsert>>();
+    for (const media of postMediaRows) {
+      const list = mediaByPostId.get(media.postId) ?? [];
+      list.push(media);
+      mediaByPostId.set(media.postId, list);
+    }
+    const editableCandidates = [
+      ...posts.filter((post) => post.authorId === may.id && post.daysAgo === 1),
+      ...posts.filter((post) => post.daysAgo === 1 && post.audience === "friends" && may.friends.has(post.authorId)).slice(0, 2),
+    ];
+    for (const candidate of editableCandidates) {
+      const row = postRowById.get(candidate.id);
+      if (!row) continue;
+      const attached = (mediaByPostId.get(candidate.id) ?? []).map((item) => ({
+        media_id: item.id,
+        attachment_order: item.attachmentOrder,
+        status: "attached" as const,
+      }));
+      const editedAt = earliest(new Date(row.acceptedAt.getTime() + 12 * MINUTE), new Date(row.releasedAt.getTime() - MINUTE));
+      postRevisionRows.push({
+        id: uuid(),
+        postId: row.id,
+        revisionNumber: 1,
+        previousReflectiveAnswer: `${row.reflectiveAnswer.slice(0, 3900)} (first draft)`,
+        previousCaption: row.caption ?? null,
+        previousRating: Math.max(1, row.rating - 1),
+        previousAudience: row.audience,
+        previousPromptId: row.promptId,
+        previousAttachmentRefs: attached,
+        createdAt: editedAt,
+      });
+      row.updatedAt = editedAt;
+    }
+
+    const deliveredNoteDate = addDays(today.localDate, -7);
+    const deliveredNoteCreated = new Date(now.getTime() - 21 * DAY);
+    const deliveredNoteAt = new Date(dayFor(deliveredNoteDate).startUtc.getTime() + 8 * HOUR);
+    const futureSelfNoteRows: Array<typeof schema.futureSelfNotes.$inferInsert> = [
+      {
+        id: uuid(),
+        ownerId: may.id,
+        body: "Remember how nervous you were before the mid-semester presentation — you got through it and went for celebratory ramen right after.",
+        deliverOn: deliveredNoteDate,
+        status: "delivered",
+        scheduleVersion: 1,
+        deliveredAt: deliveredNoteAt,
+        createdAt: deliveredNoteCreated,
+        updatedAt: deliveredNoteAt,
+      },
+      {
+        id: uuid(),
+        ownerId: may.id,
+        body: "Check in on the side project and book that weekend trip down to Wellington before flights get expensive.",
+        deliverOn: addDays(today.localDate, 14),
+        status: "scheduled",
+        scheduleVersion: 1,
+        deliveredAt: null,
+        createdAt: new Date(now.getTime() - 5 * DAY),
+        updatedAt: new Date(now.getTime() - 5 * DAY),
+      },
+      {
+        id: uuid(),
+        ownerId: may.id,
+        body: "End-of-semester reflection: hope you kept taking photos on evening walks around Mt Eden.",
+        deliverOn: addDays(today.localDate, 90),
+        status: "scheduled",
+        scheduleVersion: 1,
+        deliveredAt: null,
+        createdAt: new Date(now.getTime() - 2 * DAY),
+        updatedAt: new Date(now.getTime() - 2 * DAY),
+      },
+    ];
+
+    const notificationPreferenceRows: Array<typeof schema.accountNotificationPreferences.$inferInsert> = everyone.map((persona) => ({
+      userId: persona.id,
+      enabled: persona.isMay || random.chance(0.85),
+      createdAt: persona.createdAt,
+      updatedAt: persona.createdAt,
+    }));
+
+    const notificationEventRows: Array<typeof schema.notificationEvents.$inferInsert> = [];
+    for (const req of requestRows) {
+      if (req.status !== "pending" || !req.createdAt) continue;
+      const expiresAt = new Date(req.createdAt.getTime() + 7 * DAY);
+      if (expiresAt <= now) continue;
+      notificationEventRows.push({
+        id: uuid(),
+        kind: "friend_request",
+        recipientId: req.recipientId,
+        deduplicationKey: req.id,
+        sourceType: "friend_request",
+        sourceId: req.id,
+        targetType: "friend_request",
+        targetId: req.id,
+        createdAt: req.createdAt,
+        expiresAt,
+      });
+    }
+    if (today.nextMidnightUtc > now && today.startUtc < today.nextMidnightUtc) {
+      notificationEventRows.push({
+        id: uuid(),
+        kind: "friends_post_release",
+        recipientId: may.id,
+        deduplicationKey: today.localDate,
+        sourceType: "friends_post_release",
+        sourceId: today.localDate,
+        targetType: "friends_feed",
+        targetId: today.localDate,
+        createdAt: today.startUtc,
+        expiresAt: today.nextMidnightUtc,
+      });
+    }
+    const memberByConvAndUser = new Map(memberRows.map((m) => [`${m.conversationId}|${m.userId}`, m]));
+    for (const msg of messageRows) {
+      if (msg.senderId === may.id || msg.unsentAt || !msg.body || !msg.createdAt) continue;
+      const mayMember = memberByConvAndUser.get(`${msg.conversationId}|${may.id}`);
+      if (!mayMember || msg.sequence <= (mayMember.lastReadSequence ?? 0)) continue;
+      const expiresAt = new Date(msg.createdAt.getTime() + 7 * DAY);
+      if (expiresAt <= now) continue;
+      notificationEventRows.push({
+        id: uuid(),
+        kind: "direct_message",
+        recipientId: may.id,
+        deduplicationKey: msg.id,
+        sourceType: "message",
+        sourceId: msg.id,
+        targetType: "conversation",
+        targetId: msg.conversationId,
+        createdAt: msg.createdAt,
+        expiresAt,
+      });
+    }
+
     // --- Write ------------------------------------------------------------------
     log(`Writing ${everyone.length} accounts, ${postRows.length} posts, ${likeRows.length} likes, ${commentRows.length + replyRows.length} comments, ${messageRows.length} messages…`);
     await createDatabase(client).transaction(async (tx) => {
@@ -835,13 +971,16 @@ async function main(): Promise<void> {
       await insertChunked(tx, schema.account, accountRows);
       await insertChunked(tx, schema.ageDeclarations, ageRows);
       await insertChunked(tx, schema.termsAcceptances, termsRows);
+      await insertChunked(tx, schema.accountNotificationPreferences, notificationPreferenceRows);
       await insertChunked(tx, schema.mediaReservation, reservationRows);
       await insertChunked(tx, schema.profileAvatars, avatarRows);
       await insertChunked(tx, schema.friendRequests, requestRows);
       await insertChunked(tx, schema.friendships, friendshipRows);
       await insertChunked(tx, schema.posts, postRows);
       await insertChunked(tx, schema.postMedia, postMediaRows);
+      await insertChunked(tx, schema.postRevisions, postRevisionRows);
       await insertChunked(tx, schema.tomorrowNotes, noteRows);
+      await insertChunked(tx, schema.futureSelfNotes, futureSelfNoteRows);
       await insertChunked(tx, schema.postLikes, likeRows);
       await insertChunked(tx, schema.postComments, commentRows);
       await insertChunked(tx, schema.postComments, replyRows);
@@ -850,6 +989,7 @@ async function main(): Promise<void> {
       await insertChunked(tx, schema.messages, messageRows);
       await insertChunked(tx, schema.messageReactions, messageReactionRows);
       await insertChunked(tx, schema.conversationChanges, changeRows);
+      await insertChunked(tx, schema.notificationEvents, notificationEventRows);
     });
 
     // --- Media objects ----------------------------------------------------------
@@ -873,10 +1013,11 @@ async function main(): Promise<void> {
       "",
       `Seeded the local database in ${seconds}s.`,
       `  Accounts:       ${everyone.length} (${personas.length} personas + May Gan)`,
-      `  Posts:          ${postRows.length} (${postMediaRows.length} photos, ${noteRows.length} tomorrow notes)`,
+      `  Posts:          ${postRows.length} (${postMediaRows.length} photos, ${postRevisionRows.length} revisions, ${noteRows.length} tomorrow notes, ${futureSelfNoteRows.length} future-self notes)`,
       `  Interactions:   ${likeRows.length} likes, ${commentRows.length + replyRows.length} comments`,
       `  Friendships:    ${friendshipRows.length / 2} (${requestRows.filter((row) => row.status === "pending").length} pending requests)`,
       `  Conversations:  ${conversationRows.length} (${messageRows.length} messages)`,
+      `  Notifications:  ${notificationEventRows.length} events (${notificationPreferenceRows.filter((row) => row.enabled).length} opted-in accounts)`,
       `  Media objects:  ${objectLinks.length} in ${bucketRoot}`,
       "",
       "Demo account",

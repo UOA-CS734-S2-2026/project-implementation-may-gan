@@ -5,6 +5,7 @@ import {
   createR2MediaObjectStore,
   deleteR2Object,
   headR2Object,
+  proxyLocalMediaObjectRequest,
   R2ReadInfrastructureError,
   readR2ObjectRange,
   readR2RuntimeConfiguration,
@@ -170,6 +171,32 @@ describe("createPresignedDownloadUrl", () => {
     const second = new URL((await sign("media/user_alice/b")).url).searchParams.get("X-Amz-Signature");
     expect(first).not.toEqual(second);
   });
+
+  it("uses localPublicOrigin for local-e2e presigned URLs while keeping internal object fetches on localEndpoint", async () => {
+    const localConfig = {
+      ...configuration,
+      accountId: "local-e2e",
+      localEndpoint: "http://127.0.0.1:8788",
+      localPublicOrigin: "https://localhost:8787",
+    };
+    const download = await createPresignedDownloadUrl(localConfig, {
+      objectKey: "media/user_alice/media_abc123",
+      expiresInSeconds: 300,
+      now,
+    });
+    const upload = await createPresignedUploadUrl(localConfig, {
+      objectKey: "media/user_alice/media_abc123",
+      contentType: "image/jpeg",
+      byteSize: 1024,
+      expiresInSeconds: 300,
+      now,
+    });
+
+    expect(new URL(download.url).origin).toBe("https://localhost:8787");
+    expect(new URL(download.url).pathname).toBe(`/${configuration.bucketName}/media/user_alice/media_abc123`);
+    expect(new URL(upload.url).origin).toBe("https://localhost:8787");
+    expect(new URL(upload.url).pathname).toBe(`/${configuration.bucketName}/media/user_alice/media_abc123`);
+  });
 });
 
 describe("headR2Object / readR2ObjectRange — infrastructure error wrapping", () => {
@@ -232,3 +259,97 @@ describe("deleteR2Object", () => {
     await expect(deleteR2Object(configuration, "media/o/r")).rejects.toBeInstanceOf(R2ReadInfrastructureError);
   });
 });
+
+describe("proxyLocalMediaObjectRequest", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const localConfig = {
+    ...configuration,
+    accountId: "local-e2e",
+    localEndpoint: "http://127.0.0.1:8788",
+    localPublicOrigin: "https://localhost:8787",
+  };
+
+  it("proxies presigned object requests from the HTTPS API origin to the local S3 media server", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(new Uint8Array([0xff, 0xd8, 0xff]), {
+        status: 200,
+        headers: { "content-type": "image/jpeg" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const incoming = new Request(
+      `https://localhost:8787/${configuration.bucketName}/media/owner_1/res_1?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=deadbeef`,
+      { method: "GET" },
+    );
+    const response = await proxyLocalMediaObjectRequest(localConfig, "media/owner_1/res_1", incoming);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/jpeg");
+    const [targetUrl] = fetchMock.mock.calls[0] as [string];
+    expect(targetUrl).toBe(
+      `http://127.0.0.1:8788/${configuration.bucketName}/media/owner_1/res_1?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=deadbeef`,
+    );
+  });
+
+  it("handles browser CORS preflights and forwards fixed-length PUT uploads from trusted web origins", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 200,
+        headers: { etag: '"3-abc"' },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const preflight = new Request(
+      `https://localhost:8787/${configuration.bucketName}/media/owner_1/res_1`,
+      {
+        method: "OPTIONS",
+        headers: {
+          origin: "https://localhost:3000",
+          "access-control-request-method": "PUT",
+          "access-control-request-headers": "content-type, if-none-match",
+        },
+      },
+    );
+    const preflightResponse = await proxyLocalMediaObjectRequest(localConfig, "media/owner_1/res_1", preflight);
+    expect(preflightResponse.status).toBe(204);
+    expect(preflightResponse.headers.get("access-control-allow-origin")).toBe("https://localhost:3000");
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    const payload = new Uint8Array([0xff, 0xd8, 0xff]);
+    const putRequest = new Request(
+      `https://localhost:8787/${configuration.bucketName}/media/owner_1/res_1?X-Amz-Signature=deadbeef`,
+      {
+        method: "PUT",
+        headers: {
+          origin: "https://localhost:3000",
+          "content-type": "image/jpeg",
+          "if-none-match": "*",
+        },
+        body: payload,
+      },
+    );
+    const putResponse = await proxyLocalMediaObjectRequest(localConfig, "media/owner_1/res_1", putRequest);
+    expect(putResponse.status).toBe(200);
+    expect(putResponse.headers.get("access-control-allow-origin")).toBe("https://localhost:3000");
+    expect(putResponse.headers.get("etag")).toBe('"3-abc"');
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const sentHeaders = new Headers(init.headers);
+    expect(sentHeaders.get("content-length")).toBe("3");
+    expect(sentHeaders.get("content-type")).toBe("image/jpeg");
+    expect(sentHeaders.get("if-none-match")).toBe("*");
+  });
+
+  it("refuses non-local configurations or invalid object keys", async () => {
+    const incoming = new Request(`https://localhost:8787/${configuration.bucketName}/media/owner_1/res_1`);
+    const nonLocal = await proxyLocalMediaObjectRequest(configuration, "media/owner_1/res_1", incoming);
+    expect(nonLocal.status).toBe(404);
+
+    const badKey = await proxyLocalMediaObjectRequest(localConfig, "media/owner_1/../../secret", incoming);
+    expect(badKey.status).toBe(404);
+  });
+});
+
+

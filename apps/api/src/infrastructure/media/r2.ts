@@ -17,6 +17,8 @@ export interface R2RuntimeConfiguration {
   accessKeyId: string;
   secretAccessKey: string;
   localEndpoint?: string;
+  /** HTTPS origin of the local API Worker when proxying local-e2e presigned URLs. */
+  localPublicOrigin?: string;
 }
 
 export interface PresignedUpload {
@@ -78,6 +80,12 @@ function buildObjectUrl(configuration: R2RuntimeConfiguration, objectKey: string
   return `${origin}/${encodeURIComponent(configuration.bucketName)}/${encodeObjectKeyPath(objectKey)}`;
 }
 
+function buildPresignedObjectUrl(configuration: R2RuntimeConfiguration, objectKey: string): string {
+  const origin = (configuration.localEndpoint ? configuration.localPublicOrigin ?? configuration.localEndpoint : undefined)
+    ?? `https://${configuration.accountId}.r2.cloudflarestorage.com`;
+  return `${origin}/${encodeURIComponent(configuration.bucketName)}/${encodeObjectKeyPath(objectKey)}`;
+}
+
 function createAwsClient(configuration: R2RuntimeConfiguration): AwsClient {
   return new AwsClient({
     accessKeyId: configuration.accessKeyId,
@@ -113,7 +121,7 @@ export async function createPresignedUploadUrl(
     "if-none-match": "*",
   };
 
-  const url = new URL(buildObjectUrl(configuration, input.objectKey));
+  const url = new URL(buildPresignedObjectUrl(configuration, input.objectKey));
   url.searchParams.set("X-Amz-Expires", String(input.expiresInSeconds));
 
   const signer = new AwsV4Signer({
@@ -196,7 +204,7 @@ export async function createPresignedDownloadUrl(
   input: CreatePresignedDownloadUrlInput,
 ): Promise<PresignedDownload> {
   const now = input.now ?? new Date();
-  const url = new URL(buildObjectUrl(configuration, input.objectKey));
+  const url = new URL(buildPresignedObjectUrl(configuration, input.objectKey));
   url.searchParams.set("X-Amz-Expires", String(input.expiresInSeconds));
 
   const signer = new AwsV4Signer({
@@ -215,6 +223,79 @@ export async function createPresignedDownloadUrl(
     url: signed.url.toString(),
     expiresAt: new Date(now.getTime() + input.expiresInSeconds * 1000),
   };
+}
+
+const proxiedLocalRequestHeaders = [
+  "content-type",
+  "content-length",
+  "if-none-match",
+  "range",
+  "if-range",
+  "if-match",
+  "if-modified-since",
+  "if-unmodified-since",
+] as const;
+
+const defaultLocalCorsOrigins = ["https://localhost:3000"] as const;
+
+function buildLocalMediaCorsHeaders(origin: string | null, trustedOrigins: readonly string[]): Record<string, string> {
+  if (!origin || !trustedOrigins.includes(origin)) return {};
+  return {
+    "access-control-allow-origin": origin,
+    "access-control-allow-methods": "GET, HEAD, PUT, DELETE, OPTIONS",
+    "access-control-allow-headers": "content-type, content-length, if-none-match, range, if-range, if-match, if-modified-since, if-unmodified-since",
+    "access-control-expose-headers": "content-length, content-range, etag",
+    vary: "Origin",
+  };
+}
+
+/**
+ * Forwards a local-e2e presigned object request received on the HTTPS API Worker
+ * to the loopback HTTP media server (`localEndpoint`), so mobile and web clients
+ * always receive `https://` presigned URLs on the trusted API origin.
+ */
+export async function proxyLocalMediaObjectRequest(
+  configuration: R2RuntimeConfiguration,
+  objectKey: string,
+  request: Request,
+  trustedOrigins: readonly string[] = defaultLocalCorsOrigins,
+): Promise<Response> {
+  if (configuration.accountId !== "local-e2e" || !configuration.localEndpoint) {
+    return new Response(null, { status: 404 });
+  }
+  try {
+    assertOwnedMediaObjectKey(objectKey);
+  } catch {
+    return new Response(null, { status: 404 });
+  }
+  const cors = buildLocalMediaCorsHeaders(request.headers.get("origin"), trustedOrigins);
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: cors });
+  }
+  const headers = new Headers();
+  for (const name of proxiedLocalRequestHeaders) {
+    const value = request.headers.get(name);
+    if (value !== null) headers.set(name, value);
+  }
+  const body = request.method === "PUT" ? await request.arrayBuffer() : undefined;
+  if (body !== undefined) {
+    headers.set("content-length", String(body.byteLength));
+  }
+  const targetUrl = new URL(buildObjectUrl(configuration, objectKey));
+  targetUrl.search = new URL(request.url).search;
+  const upstream = await fetch(targetUrl.toString(), {
+    method: request.method,
+    headers,
+    ...(body !== undefined ? { body } : {}),
+  });
+  const responseHeaders = new Headers(upstream.headers);
+  for (const [name, value] of Object.entries(cors)) {
+    responseHeaders.set(name, value);
+  }
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: responseHeaders,
+  });
 }
 
 /**
