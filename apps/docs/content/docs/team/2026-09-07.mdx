@@ -1,0 +1,50 @@
+---
+title: Week of 2026-09-07
+description: Architecture, product rules, contracts, and database setup
+---
+
+Period: 7 to 13 September 2026 (Pacific/Auckland).
+
+We established our monorepo and agreed on our architecture and product policies before building the application. In Anton's architecture proposal ([PR #3](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/3)), we chose Flutter and Next.js clients, a Hono API on Cloudflare Workers, PostgreSQL with Drizzle, Better Auth, and private R2 media storage.
+
+## Our progress
+
+- We merged Jos's contribution guidelines and issue/PR templates in [PR #2](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/2). We also initialised our monorepo (Anton) in [PR #4](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/4).
+- We recorded our agreed product policies (Anton) in [PR #5](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/5). Our policies cover friendship history, released edits, blocking, public links, media limits, retention, and recovery targets.
+- We defined REST and OpenAPI contracts (Anton) in [PR #52](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/52), added API documentation in [PR #55](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/55), and generated TypeScript and Dart clients in [PR #56](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/56).
+- We configured Drizzle connectivity (Jos) in [PR #57](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/57). We verified staging Hyperdrive connectivity (Anton) in [PR #59](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/59).
+- We opened our initial task backlog, covering accounts, posting, media, messaging, reflection, sharing, and verification.
+
+## Our decisions
+
+We adopted our architecture proposal and [product decisions](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/blob/main/docs/dayli/product-decisions.md) as our implementation plan.
+
+## Next steps
+
+We continued our database migrations and transaction checks under [#8](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/8) and [#9](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/9). We continued tracking authentication compatibility in [#10](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/10).
+
+## Source record
+
+<details>
+<summary>Merged pull requests for this week</summary>
+
+| PR | Author | Merged (Auckland) | Change |
+| --- | --- | --- | --- |
+| [PR #2](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/2) | jebadenas | 2026-09-08 | chore: add contribution guidelines & issue/PR templates |
+| [PR #3](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/3) | AntGa | 2026-09-09 | docs: propose Dayli mobile and web architecture |
+| [PR #4](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/4) | AntGa | 2026-09-09 | chore: initialise Dayli monorepo |
+| [PR #5](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/5) | AntGa | 2026-09-09 | docs: record agreed product policies |
+| [PR #52](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/52) | AntGa | 2026-09-11 | feat: define REST and OpenAPI contracts |
+| [PR #55](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/55) | AntGa | 2026-09-11 | feat: add Scalar API documentation |
+| [PR #56](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/56) | AntGa | 2026-09-11 | feat: generate TypeScript and Dart API clients |
+| [PR #57](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/57) | jebadenas | 2026-09-13 | Configure Drizzle PostgreSQL connectivity |
+| [PR #59](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/59) | AntGa | 2026-09-13 | Verify staging Hyperdrive connectivity in Workers |
+
+</details>
+
+Main-branch commit references:
+
+- [72d6bab5](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/commit/72d6bab55e386433237ecff3c4b9fdbe9ce8a667): docs: propose Dayli mobile and web architecture (Anton Garay, 2026-09-08).
+- [224c1e81](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/commit/224c1e81d4e156ca348d2f784332c147044ac6e2): fix: strengthen migration review evidence (jebadenas, 2026-09-13).
+
+[All weekly records](/docs/team) · [Team contributions](/docs/team/task-breakdown)
