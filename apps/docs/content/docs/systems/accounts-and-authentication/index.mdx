@@ -174,6 +174,18 @@ A shared parent-domain cookie would also widen where the browser sends the crede
 
 We also kept Better Auth in the API rather than moving authentication into Next.js. Mobile needs the same session authority, and protected API operations still need their own checks. One backend owns those rules.
 
+## Protected application loading
+
+The ordinary application layout uses `ProtectedAppGate`. After Better Auth resolves the browser session, `AccountAccessProvider` requests `GET /api/v1/account/bootstrap` once to read account restrictions and username setup readiness together. This replaces the initial sequence of separate legal-policy and username requests. It does not replace the server-side landing decision described above.
+
+The provider keeps that UI snapshot in memory for the current user and session. Path and query changes reuse it without another access request. A visible tab revalidates when the snapshot reaches five minutes old. Returning to a hidden tab also revalidates if the snapshot is stale. Browser scheduling and network latency can delay completion.
+
+Successful legal acceptance, initial username setup, and deletion request or cancellation invalidate the snapshot. Protected API responses carrying structured account restrictions remove ordinary private content and refresh access state. Resource-specific forbidden responses stay with the feature that requested them. Signing out, changing accounts, or changing sessions discards the snapshot and ignores late responses from the previous scope.
+
+This is a rendering optimisation, not an authorisation cache. The API still verifies sessions and account policy on protected requests, and feature services still check membership, ownership, and action-specific permissions. Within one request, middleware reuses the verified actor and policy instead of resolving them again. Better Auth cookie caching is not enabled by this change.
+
+Account management does not inherit the ordinary-app gate. Export and deletion flows retain their separate checks so restricted accounts can use the management operations their server policy permits. An initially unavailable bootstrap shows retry UI without mounting ordinary private content.
+
 ## Signing in through the web Worker
 
 A Cloudflare **service binding** gives one Worker a configured connection to another Worker. In Dayli, `API_BROWSER_PROXY` points from the web Worker to the API's named `BrowserProxyEntrypoint`.

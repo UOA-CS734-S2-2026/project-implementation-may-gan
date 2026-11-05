@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { apiBaseUrl } from "@/lib/api/config";
+import { accountApiFetch as fetch } from "@/lib/account/access-events";
 
 const exportStatus = z.object({
   requestId: z.string().nullable(),

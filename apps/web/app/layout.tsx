@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import localFont from "next/font/local";
 import { Toaster } from "sonner";
 import { SessionProvider } from "@/lib/session/provider";
+import { AccountAccessProvider } from "@/lib/account/access-provider";
 import { ThemeProvider } from "@/lib/theme/provider";
 import "./globals.css";
 
@@ -43,10 +44,12 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
     >
       <body className="min-h-full flex flex-col">
         <SessionProvider>
-          <ThemeProvider>
-            {children}
-            <Toaster />
-          </ThemeProvider>
+          <AccountAccessProvider>
+            <ThemeProvider>
+              {children}
+              <Toaster />
+            </ThemeProvider>
+          </AccountAccessProvider>
         </SessionProvider>
       </body>
     </html>

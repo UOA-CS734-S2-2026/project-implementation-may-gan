@@ -41,6 +41,8 @@ part 'api/profile_api.dart';
 part 'api/relationships_api.dart';
 part 'api/system_api.dart';
 
+part 'model/account_bootstrap.dart';
+part 'model/account_bootstrap_onboarding.dart';
 part 'model/account_deletion_cancellation_result.dart';
 part 'model/account_deletion_request_result.dart';
 part 'model/account_deletion_status.dart';

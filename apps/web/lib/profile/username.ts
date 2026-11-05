@@ -1,4 +1,5 @@
 import { apiBaseUrl } from "@/lib/api/config";
+import { accountApiFetch as fetch } from "@/lib/account/access-events";
 
 export type UsernameProfile = {
   username: string | null;

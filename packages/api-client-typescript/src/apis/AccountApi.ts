@@ -14,6 +14,11 @@
 
 import * as runtime from '../runtime';
 import {
+    type AccountBootstrap,
+    AccountBootstrapFromJSON,
+    AccountBootstrapToJSON,
+} from '../models/AccountBootstrap';
+import {
     type AccountDeletionCancellationResult,
     AccountDeletionCancellationResultFromJSON,
     AccountDeletionCancellationResultToJSON,
@@ -539,6 +544,49 @@ export class AccountApi extends runtime.BaseAPI {
      */
     async accountRequestExport(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountExportRequestResult> {
         const response = await this.accountRequestExportRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for getAccountBootstrap without sending the request
+     */
+    async getAccountBootstrapRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/account/bootstrap`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async getAccountBootstrapRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AccountBootstrap>> {
+        const requestOptions = await this.getAccountBootstrapRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AccountBootstrapFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async getAccountBootstrap(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountBootstrap> {
+        const response = await this.getAccountBootstrapRaw(initOverrides);
         return await response.value();
     }
 

@@ -533,6 +533,7 @@ export function createAppForEnv(env: ApiEnv) {
   const accountPolicy = configuration ? {
     resolveSession: createSessionResolver(configuration),
     policies: createHyperdriveAccountPolicyResolver(configuration.hyperdrive),
+    usernameStore: usernameProfile?.store,
   } satisfies AccountPolicyDependencies : undefined;
   const deletionActivation = configuration
     ? readDeletionRequestActivation(env, configuration.publicApiBaseURL)

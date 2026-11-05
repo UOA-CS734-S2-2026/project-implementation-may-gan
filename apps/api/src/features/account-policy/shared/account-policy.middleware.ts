@@ -21,6 +21,7 @@ const publicApiRoutes = new Set([
 ]);
 const managementApiRoutes = new Map<string, AccountCapability>([
   ["GET /api/v1/account/status", "policy_read"],
+  ["GET /api/v1/account/bootstrap", "policy_read"],
   ["GET /api/v1/account/policy", "policy_read"],
   ["GET /api/v1/account/deletion", "policy_read"],
   ["POST /api/v1/account/deletion/request", "request_deletion"],
@@ -137,6 +138,7 @@ export function createAccountPolicyMiddleware(
       return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Account policy is temporarily unavailable.");
     }
     context.set("actor", actor);
+    context.set("accountPolicy", policy);
     if (!allowsAccountCapability(policy, capability)) return restrictedResponse(context, policy);
     return next();
   };

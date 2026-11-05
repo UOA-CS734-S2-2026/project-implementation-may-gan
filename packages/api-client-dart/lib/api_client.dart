@@ -204,6 +204,10 @@ class ApiClient {
           return valueString == 'true' || valueString == '1';
         case 'DateTime':
           return value is DateTime ? value : DateTime.tryParse(value);
+        case 'AccountBootstrap':
+          return AccountBootstrap.fromJson(value);
+        case 'AccountBootstrapOnboarding':
+          return AccountBootstrapOnboarding.fromJson(value);
         case 'AccountDeletionCancellationResult':
           return AccountDeletionCancellationResult.fromJson(value);
         case 'AccountDeletionRequestResult':

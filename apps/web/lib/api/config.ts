@@ -1,4 +1,5 @@
 import { Configuration } from "@dayli/api-client";
+import { accountApiFetch } from "@/lib/account/access-events";
 
 const publicApiBaseUrlValue = process.env.NEXT_PUBLIC_API_BASE_URL;
 const browserProxyEnabledValue = process.env.NEXT_PUBLIC_WEB_API_PROXY_ENABLED;
@@ -53,5 +54,5 @@ export const apiBaseUrl = browserApiBaseUrl;
 
 export function apiConfiguration(): Configuration | undefined {
   if (!browserApiBaseUrl) return undefined;
-  return new Configuration({ basePath: browserApiBaseUrl, credentials: "include" });
+  return new Configuration({ basePath: browserApiBaseUrl, credentials: "include", fetchApi: accountApiFetch });
 }
