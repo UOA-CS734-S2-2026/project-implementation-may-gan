@@ -26,7 +26,7 @@ export function createRequireSession(
 
     let actor: AuthenticatedActor | null | undefined;
     try {
-      actor = await resolveSession(context.req.raw);
+      actor = context.get("actor") ?? await resolveSession(context.req.raw);
     } catch {
       return apiErrorResponse(
         context,

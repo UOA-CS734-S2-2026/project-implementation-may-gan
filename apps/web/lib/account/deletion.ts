@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { apiBaseUrl } from "@/lib/api/config";
+import { accountApiFetch as fetch } from "./access-events";
 
 const timestamp = z.string().datetime({ offset: true });
 const statusSchema = z.object({

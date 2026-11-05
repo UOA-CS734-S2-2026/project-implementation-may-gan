@@ -1,4 +1,5 @@
 import type { Env } from "hono";
+import type { AccountPolicy } from "../features/account-policy/shared/account-policy";
 
 /** Identity established by Better Auth, never request input. */
 export interface AuthenticatedActor {
@@ -11,6 +12,8 @@ export interface AuthenticatedActor {
 export interface AuthenticatedApiEnv extends Env {
   Variables: {
     actor: AuthenticatedActor;
+    /** Policy verified for this request's actor, never reused across requests. */
+    accountPolicy?: AccountPolicy;
   };
 }
 

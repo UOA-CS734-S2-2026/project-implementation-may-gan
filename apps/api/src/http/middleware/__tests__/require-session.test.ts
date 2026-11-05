@@ -12,6 +12,32 @@ function createApp(resolveSession: Parameters<typeof createRequireSession>[0]) {
 }
 
 describe("createRequireSession", () => {
+  it("reuses a verified upstream actor but still applies rate limits", async () => {
+    const app = new Hono<AuthenticatedApiEnv>();
+    const resolveSession = vi.fn(async () => ({ userId: "wrong" }));
+    const check = vi.fn(async () => "denied" as const);
+    app.use("/protected", async (context, next) => {
+      context.set("actor", { userId: "verified", sessionId: "session" });
+      await next();
+    });
+    app.use("/protected", createRequireSession(resolveSession, { check }));
+    app.get("/protected", (context) => context.json(context.get("actor")));
+    expect((await app.request("/protected")).status).toBe(429);
+    expect(resolveSession).not.toHaveBeenCalled();
+    expect(check).toHaveBeenCalledWith(expect.any(Request), { userId: "verified", sessionId: "session" });
+  });
+
+  it("resolves once per request, never sharing actors between requests", async () => {
+    const resolveSession = vi.fn(async () => ({ userId: "verified" }));
+    const app = new Hono<AuthenticatedApiEnv>();
+    app.use("*", createRequireSession(resolveSession));
+    app.use("*", createRequireSession(resolveSession));
+    app.get("/protected", (context) => context.json(context.get("actor")));
+    await app.request("/protected");
+    await app.request("/protected");
+    expect(resolveSession).toHaveBeenCalledTimes(2);
+  });
+
   it("sets the server-verified actor and permits both credential transport forms", async () => {
     const { app, operation } = createApp(async (request) => {
       const authorization = request.headers.get("authorization");

@@ -454,6 +454,40 @@
           "SERVICE_UNAVAILABLE"
         ]
       },
+      "AccountBootstrap": {
+        "type": "object",
+        "properties": {
+          "restriction": {
+            "type": "string"
+          },
+          "allowed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "onboarding": {
+            "type": "object",
+            "properties": {
+              "legalAcceptanceRequired": {
+                "type": "boolean"
+              },
+              "usernameSetupRequired": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "legalAcceptanceRequired",
+              "usernameSetupRequired"
+            ]
+          }
+        },
+        "required": [
+          "restriction",
+          "allowed",
+          "onboarding"
+        ]
+      },
       "AccountDeletionStatus": {
         "type": "object",
         "properties": {
@@ -3382,6 +3416,64 @@
           },
           "422": {
             "description": "The query parameters are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account/bootstrap": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "getAccountBootstrap",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session-scoped UI access state, not an authorisation credential.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountBootstrap"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Account access denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Account state unavailable.",
             "content": {
               "application/json": {
                 "schema": {

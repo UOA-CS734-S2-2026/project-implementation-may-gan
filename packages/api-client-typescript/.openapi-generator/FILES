@@ -17,6 +17,8 @@ src/apis/RelationshipsApi.ts
 src/apis/SystemApi.ts
 src/apis/index.ts
 src/index.ts
+src/models/AccountBootstrap.ts
+src/models/AccountBootstrapOnboarding.ts
 src/models/AccountDeletionCancellationResult.ts
 src/models/AccountDeletionRequestResult.ts
 src/models/AccountDeletionStatus.ts

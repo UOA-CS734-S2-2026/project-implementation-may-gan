@@ -25,6 +25,8 @@ lib/auth/authentication.dart
 lib/auth/http_basic_auth.dart
 lib/auth/http_bearer_auth.dart
 lib/auth/oauth.dart
+lib/model/account_bootstrap.dart
+lib/model/account_bootstrap_onboarding.dart
 lib/model/account_deletion_cancellation_result.dart
 lib/model/account_deletion_request_result.dart
 lib/model/account_deletion_status.dart

@@ -7,11 +7,8 @@ import AppLayout from "./layout";
 let navbarClient: QueryClient | undefined;
 let pageClient: QueryClient | undefined;
 
-vi.mock("@/components/auth/UsernameSetupGate", () => ({
-  UsernameSetupGate: ({ children }: { children: React.ReactNode }) => children,
-}));
-vi.mock("@/components/auth/LegalAcceptanceGate", () => ({
-  LegalAcceptanceGate: ({ children }: { children: React.ReactNode }) => children,
+vi.mock("@/components/auth/ProtectedAppGate", () => ({
+  ProtectedAppGate: ({ children }: { children: React.ReactNode }) => children,
 }));
 vi.mock("@/components/ui/layout/Navbar", () => ({
   Navbar: () => {

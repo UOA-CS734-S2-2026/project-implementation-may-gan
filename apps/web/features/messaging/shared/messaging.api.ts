@@ -1,5 +1,5 @@
-import { Configuration, MessagingApi, ResponseError } from "@dayli/api-client";
-import { apiBaseUrl } from "@/lib/api/config";
+import { MessagingApi, ResponseError } from "@dayli/api-client";
+import { apiConfiguration } from "@/lib/api/config";
 
 export type Reaction = "like" | "love" | "laugh" | "surprised" | "sad" | "angry" | "thanks";
 
@@ -49,7 +49,8 @@ export type MessagingFailure = "unauthenticated" | "network" | "unavailable" | "
 export type MessagingResult<T> = { ok: true; value: T } | { ok: false; failure: MessagingFailure; message: string };
 
 function api(): MessagingApi | null {
-  return apiBaseUrl ? new MessagingApi(new Configuration({ basePath: apiBaseUrl, credentials: "include" })) : null;
+  const configuration = apiConfiguration();
+  return configuration ? new MessagingApi(configuration) : null;
 }
 
 async function generated<T>(run: (client: MessagingApi) => Promise<T>): Promise<MessagingResult<T>> {
